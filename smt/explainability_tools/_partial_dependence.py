@@ -52,7 +52,6 @@ def partial_dependence(
         *,
         sample_weight=None,
         categorical_features=None,
-        feature_names=None,
         percentiles=(0.05, 0.95),
         grid_resolution=100,
         kind="average"
