@@ -4,11 +4,23 @@ import numpy as np
 from scipy.stats.mstats import mquantiles
 
 class PartialDependenceDisplay:
-    def __init__(self, pd_results, *, features, deciles, random_state = None):
+    def __init__(
+            self, 
+            pd_results, 
+            *, 
+            features, 
+            deciles, 
+            feature_names, 
+            is_categorical,
+            random_state = None
+            ):
         self.pd_results = pd_results
         self.features = features
         self.deciles = deciles
+        self.feature_names = feature_names
+        self.is_categorical = is_categorical
         self.random_state = random_state
+        
 
     @classmethod
     def from_surrogate_model(
@@ -23,12 +35,23 @@ class PartialDependenceDisplay:
             percentiles=(0.05, 0.95),
             grid_resolution=100,
             kind="average", 
-            centered = False
+            centered = False,
+            ratio_samples = None,
+            inverse_categories_map = None,
+            figsize=None,
     ):
         pd_results = partial_dependence(
-            model, X, features, sample_weight=sample_weight, 
-            categorical_features=categorical_features, percentiles=percentiles, 
-            grid_resolution=grid_resolution, kind=kind)
+            model, 
+            X, 
+            features, 
+            sample_weight=sample_weight, 
+            categorical_features=categorical_features, 
+            percentiles=percentiles, 
+            grid_resolution=grid_resolution, 
+            kind=kind, 
+            ratio_samples=ratio_samples,
+            inverse_categories_map = inverse_categories_map,
+            )
 
         target_features = set()
         for feature in features:
@@ -38,21 +61,34 @@ class PartialDependenceDisplay:
                 for f in feature:
                     target_features.add(f)
 
+        is_categorical = [0] * X.shape[1]
+        if categorical_features is not None:
+            for feature_index in categorical_features:
+                is_categorical[feature_index] = 1
+
         deciles = {}
         for feature in target_features:
-            deciles[feature] = mquantiles(X[:, feature], prob=np.arange(0.1, 1.0, 0.1))
+            if is_categorical[feature] == 0:
+                deciles[feature] = mquantiles(
+                    X[:, feature], 
+                    prob=np.arange(0.1, 1.0, 0.1)
+                    )
             
         display = PartialDependenceDisplay(
             pd_results, 
             features = features, 
             deciles = deciles,
+            feature_names = feature_names,
+            is_categorical=is_categorical,
             )
         return display.plot(
-            centered=centered
+            centered=centered,
+            figsize=figsize,
         )
 
     def _plot_ice_lines(
         self,
+        categorical,
         preds,
         feature_values,
         n_ice_to_plot,
@@ -65,34 +101,72 @@ class PartialDependenceDisplay:
             rng = np.random.mtrand._rand
         else:
             rng = np.random.RandomState(self.random_state)
-        # subsample ICE
-        ice_lines_idx = rng.choice(
-            preds.shape[0],
-            n_ice_to_plot,
-            replace=False
-        )
-        ice_lines_subsampled = preds[ice_lines_idx, :]
-        # plot the subsampled ICE
-        for ice_idx, ice in enumerate(ice_lines_subsampled):
-            # line_idx = np.unravel_index(
-            #     pd_plot_idx * n_total_lines_by_plot + ice_idx, self.lines_.shape
-            # )
-            # self.lines_[line_idx] = ax.plot(
-            #     feature_values, ice.ravel(), **individual_line_kw
-            # )[0]
-            ax.plot(feature_values[0], ice.ravel(), **individual_line_kw)
+        if categorical:
+            medianprops = {
+                'color': 'black',
+            }
+            boxprops = {
+                # 'facecolor': 'white',
+                'facecolor': 'None',
+            }
+            values = []
+            for i in range(preds.shape[1]):
+                values.append(preds[:, i])
+            ax.boxplot(
+                values,
+                patch_artist=True, 
+                medianprops=medianprops,
+                boxprops=boxprops,
+                )
+        else:
+            # subsample ICE
+            ice_lines_idx = rng.choice(
+                preds.shape[0],
+                n_ice_to_plot,
+                replace=False
+            )
+            ice_lines_subsampled = preds[ice_lines_idx, :]
+            # plot the subsampled ICE
+            for ice_idx, ice in enumerate(ice_lines_subsampled):
+                # line_idx = np.unravel_index(
+                #     pd_plot_idx * n_total_lines_by_plot + ice_idx, self.lines_.shape
+                # )
+                # self.lines_[line_idx] = ax.plot(
+                #     feature_values, ice.ravel(), **individual_line_kw
+                # )[0]
+                ax.plot(feature_values[0], ice.ravel(), **individual_line_kw)
+            # individual_line_kw_label = individual_line_kw
+            # individual_line_kw_label['label'] = "ICE"
+            # ax.plot([], [], **individual_line_kw_label)
 
     def _plot_average_dependence(
         self, 
+        categorical,
+        kind_plot,
         avg_preds,
         feature_values,
         ax,
         pd_line_idx,
         line_kw
     ):
-        categorical = False
+        # print(avg_preds, categorical, kind_plot)
         if categorical:
-            pass
+            if kind_plot == "both":
+                ax.scatter(
+                    np.arange(1, len(avg_preds)+1), 
+                    avg_preds,
+                    color="blue",
+                    label='Average',
+                )
+            else:
+                ax.bar(
+                    np.arange(1, len(avg_preds)+1), 
+                    avg_preds,
+                    color="blue", 
+                    edgecolor='black', 
+                    linewidth=0.8,
+                )
+                ax.set_xticks(np.arange(1, len(avg_preds)+1))
         else:
             ax.plot(
                 feature_values[0], 
@@ -103,9 +177,11 @@ class PartialDependenceDisplay:
     def _plot_one_way_partial_dependence(
         self, 
         kind, 
+        categorical,
         preds,
         avg_preds,
         feature_values, 
+        feature_categories,
         feature_idx, 
         n_ice_lines,
         ax,
@@ -121,6 +197,7 @@ class PartialDependenceDisplay:
 
         if kind in ["individual", "both"]:
             self._plot_ice_lines(
+                categorical, 
                 preds,
                 feature_values,
                 n_ice_lines,
@@ -137,6 +214,8 @@ class PartialDependenceDisplay:
             else:
                 pd_line_idx = plot_idx * n_lines + n_ice_lines
             self._plot_average_dependence(
+                categorical,
+                kind,
                 avg_preds.ravel(),
                 feature_values,
                 ax,
@@ -160,46 +239,114 @@ class PartialDependenceDisplay:
         # max_val = max(val[1] for val in pdp_lim.values())
         # ax.set_ylim([min_val, max_val])
         if kind in ["individual", "both"]:
-            ax.set_ylim([1*preds.min(), 1*preds.max()])
+            max_val = preds.max()
+            min_val = preds.min()
         else:
-            ax.set_ylim([1*avg_preds.min(), 1*avg_preds.max()])
+            max_val = avg_preds.max()
+            min_val = avg_preds.min()
+        max_val = max_val + 0.05 * (max_val-min_val)
+        min_val = min_val - 0.05 * (max_val-min_val)
+        ax.set_ylim([min_val, max_val])
 
         # Set xlabel if it is not already set
         # if not ax.get_xlabel():
         #     ax.set_xlabel(self.feature_names[feature_idx])
-        ax.set_xlabel(f'x_{feature_idx}')
+        if self.feature_names is None:
+            ax.set_xlabel(fr'$x_{feature_idx}$', fontsize=14)
+        else:
+            ax.set_xlabel(self.feature_names[feature_idx], fontsize=14)
+        ax.xaxis.set_tick_params(labelsize=12)
+        ax.yaxis.set_tick_params(labelsize=12)
 
         if n_cols is None or plot_idx % n_cols == 0:
             if not ax.get_ylabel():
-                ax.set_ylabel("Partial dependence")
+                ax.set_ylabel("Partial dependence", fontsize=14)
+                # ax.set_ylabel(r"$y$", fontsize=14)
         else:
             # ax.set_yticklabels([])
             pass
-
-
+        
+        if categorical:
+            ax.set_xticklabels(feature_categories[0])
         # if pd_line_kw.get("label", None) and kind != "individual" and not categorical:
         #     ax.legend()
         if kind == "both":
-            ax.legend()
+            ax.legend(
+                loc = 'upper left', 
+                fontsize = 12,
+            )
+        ax.grid(
+            color = 'black',
+            alpha = 0.2,
+            )
         
     
     def _plot_two_way_partial_dependence(
             self,
             kind,
+            categorical,
             avg_preds,
             feature_values,
+            feature_categories,
             feature_idx,
             ax,
             Z_level,
             contour_kw,
             heatmap_kw
     ):
-        categorical = False
         if kind == "individual":
             pass
         else:
             if categorical:
-                pass
+                import matplotlib.pyplot as plt
+                plt.rcParams.update({
+                    "text.usetex": False,
+                    "font.family": "serif",
+                    "font.serif": "cmr10",
+                    "axes.formatter.use_mathtext": True,
+                })
+
+                # default_im_kw = dict(interpolation="nearest", cmap="viridis")
+                default_im_kw = dict(interpolation="nearest", cmap="Blues")
+                im_kw = {**default_im_kw, **heatmap_kw}
+
+                data = avg_preds
+                im = ax.imshow(data, **im_kw)
+                text = None
+                cmap_min, cmap_max = im.cmap(0), im.cmap(1.0)
+
+                text = np.empty_like(data, dtype=object)
+                # print text with appropriate color depending on background
+                thresh = (data.max() + data.min()) / 2.0
+
+                for flat_index in range(data.size):
+                    row, col = np.unravel_index(flat_index, data.shape)
+                    color = cmap_max if data[row, col] < thresh else cmap_min
+                    # color = 'black'
+                    values_format = ".1e"
+                    text_data = format(data[row, col], values_format)
+
+                    text_kwargs = dict(ha="center", va="center", color=color)
+                    text[row, col] = ax.text(col, row, text_data, **text_kwargs)
+
+                fig = ax.figure
+                fig.colorbar(im, ax=ax)
+                ax.set(
+                    xticks=np.arange(len(feature_values[1])),
+                    yticks=np.arange(len(feature_values[0])),
+                    xticklabels=feature_categories[1],
+                    yticklabels=feature_categories[0],
+                )
+                if self.feature_names is not None:
+                    xlabel=self.feature_names[feature_idx[1]]
+                    ylabel=self.feature_names[feature_idx[0]]
+                else:
+                    xlabel = fr'$x_{feature_idx[1]}$'
+                    ylabel = fr'$x_{feature_idx[0]}$'
+                ax.set_xlabel(xlabel, fontsize=14)
+                ax.set_ylabel(ylabel, fontsize=14)
+
+                plt.setp(ax.get_xticklabels(), rotation="vertical")
             else:
                 from matplotlib import transforms
                 XX, YY = np.meshgrid(feature_values[0], feature_values[1])
@@ -207,7 +354,7 @@ class PartialDependenceDisplay:
                 CS = ax.contour(XX, YY, Z, levels=Z_level, linewidths=0.5, colors="k")
                 # contour_idx = np.unravel_index(pd_plot_idx, self.contours_.shape)
                 ax.contourf(XX, YY, Z, levels=Z_level, vmax=Z_level[-1], vmin=Z_level[0], **contour_kw)
-                ax.clabel(CS, fmt="%2.2f", colors="k", fontsize=10, inline=True)
+                ax.clabel(CS, fmt="%2.2f", colors="k", fontsize=12, inline=True)
 
                 trans = transforms.blended_transform_factory(ax.transData, ax.transAxes)
                 # create the decile line for the vertical axis
@@ -231,8 +378,14 @@ class PartialDependenceDisplay:
                 # vlines
                 ax.set_xlim(xlim)
                 ax.set_ylim(ylim)
-                ax.set_xlabel(f'x_{feature_idx[0]}')
-                ax.set_ylabel(f'x_{feature_idx[1]}')
+                if self.feature_names is None:
+                    ax.set_xlabel(fr'$x_{feature_idx[0]}$', fontsize=14)
+                    ax.set_ylabel(fr'$x_{feature_idx[1]}$', fontsize=14)
+                else:
+                    ax.set_xlabel(self.feature_names[feature_idx[0]], fontsize=14)
+                    ax.set_ylabel(self.feature_names[feature_idx[1]], fontsize=14)
+                ax.xaxis.set_tick_params(labelsize=12)
+                ax.yaxis.set_tick_params(labelsize=12)
             
     def plot(
         self, 
@@ -248,22 +401,19 @@ class PartialDependenceDisplay:
         centered = False,
         pdp_lim = None,
         max_num_ice_lines = 250,
+        figsize=None,
     ):
         import matplotlib.pyplot as plt  
         from matplotlib.gridspec import GridSpecFromSubplotSpec 
+        # plt.rcParams["axes.formatter.use_mathtext"] = True
+        plt.rcParams.update({
+            "text.usetex": False,
+            "font.family": "serif",
+            "font.serif": "cmr10",
+            "axes.formatter.use_mathtext": True,
+        })
 
         kind = []
-        # for pd_result in self.pd_results:
-        #     if len(pd_result['grid_values']) > 1:
-        #         kind.append('average')
-        #     else:
-        #         keys = pd_result.keys()
-        #         if ('average' in keys) and ('individual' in keys):
-        #             kind.append('both')
-        #         elif ('average' in keys) and ('individual' not in keys):
-        #             kind.append('average')
-        #         else:
-        #             kind.append('individual')
         for pd_result in self.pd_results:
             keys = pd_result.keys()
             if (len(pd_result['grid_values'])>1) & ('average' in keys):
@@ -286,6 +436,9 @@ class PartialDependenceDisplay:
             pd_results_ = []
             for kind_plot, pd_result in zip(kind, self.pd_results):
                 current_results = {"grid_values": pd_result["grid_values"]}
+
+                if "grid_categories" in pd_result:
+                    current_results["grid_categories"] = pd_result["grid_categories"]
 
                 if kind_plot in ("individual", "both"):
                     preds = pd_result["individual"]
@@ -318,8 +471,15 @@ class PartialDependenceDisplay:
                 min_pd = min(min_pd, old_min_pd)
                 max_pd = max(max_pd, old_max_pd)
                 pdp_lim[n_features] = (min_pd, max_pd)
-        
 
+        contains_categories = []
+        for feature in self.features:
+            if type(feature) is int:
+                contains_categories.append(self.is_categorical[feature])
+            else:
+                contains_categories_ = [self.is_categorical[f] for f in feature]
+                contains_categories.append(np.max(contains_categories_)==1)
+        
         if line_kw is None:
             line_kw = {}
         if ice_lines_kw is None:
@@ -359,7 +519,10 @@ class PartialDependenceDisplay:
             n_cols = min(n_cols, n_results)
             n_rows = int(np.ceil(n_results / float(n_cols)))
             self.axes_ = np.empty((n_rows, n_cols), dtype=object)
-            self.figure_.set_size_inches(n_cols * 7, n_rows * 5)
+            if figsize is None:
+                self.figure_.set_size_inches(n_cols * 7, n_rows * 5)
+            else:
+                self.figure_.set_size_inches(figsize[0], figsize[1])
 
             axes_ravel = self.axes_.ravel()
 
@@ -375,18 +538,22 @@ class PartialDependenceDisplay:
         self.deciles_vlines_ = np.empty_like(self.axes_, dtype=object)
         self.deciles_hlines_ = np.empty_like(self.axes_, dtype=object)
 
-        for plot_idx, (axi, pd_result, kind_plot, feature_idx) in enumerate(
+        for plot_idx, (axi, pd_result, kind_plot, feature_idx, cat) in enumerate(
             zip(
                 self.axes_.ravel(),
                 pd_results_, 
                 kind, 
-                self.features
+                self.features,
+                contains_categories,
             )
         ):
             # print(feature_idx)
             avg_preds = None
             preds = None
             feature_values = pd_result["grid_values"]
+            feature_categories = None
+            if cat:
+                feature_categories = pd_result["grid_categories"]
 
             if kind_plot == "individual":
                 preds = pd_result["individual"]
@@ -398,12 +565,19 @@ class PartialDependenceDisplay:
             
             if len(feature_values) == 1:
                 # define the line-style for the current plot
+                # default_line_kws = {
+                #     "color": "C0",
+                #     "label": "average" if kind_plot == "both" else None,
+                # }
                 default_line_kws = {
                     "color": "C0",
-                    "label": "average" if kind_plot == "both" else None,
+                    "label": "Average" if kind_plot == "both" else None,
                 }
                 if kind_plot == "individual":
-                    default_ice_lines_kws = {"alpha": 0.3, "linewidth": 0.5}
+                    default_ice_lines_kws = {
+                        "alpha": 0.3, 
+                        "linewidth": 0.5, 
+                        }
                     default_pd_lines_kws = {}
                 elif kind_plot == "both":
                     # by default, we need to distinguish the average line from
@@ -411,15 +585,21 @@ class PartialDependenceDisplay:
                     default_ice_lines_kws = {
                         "alpha": 0.3,
                         "linewidth": 0.5,
-                        "color": "tab:blue",
+                        "color": "tab:gray",
+                        "label": r"ICE"
                     }
                     default_pd_lines_kws = {
-                        "color": "tab:orange",
+                        "color": "blue",
                         "linestyle": "--",
+                        "linewidth": 2.5,
+                        "label": r"Average"
                     }
                 else:
                     default_ice_lines_kws = {}
-                    default_pd_lines_kws = {}
+                    default_pd_lines_kws = {
+                        "color": "blue",
+                        "linewidth": 2.5,
+                    }
 
                 ice_lines_kw = {
                     **default_line_kws,
@@ -444,9 +624,11 @@ class PartialDependenceDisplay:
 
                 self._plot_one_way_partial_dependence(
                     kind_plot, 
+                    cat,
                     preds,
                     avg_preds,
                     feature_values, 
+                    feature_categories,
                     feature_idx, 
                     n_ice_lines,
                     axi,
@@ -462,8 +644,10 @@ class PartialDependenceDisplay:
             else:
                 self._plot_two_way_partial_dependence(
                     kind_plot,
+                    cat,
                     avg_preds,
                     feature_values,
+                    feature_categories,
                     feature_idx,
                     axi,
                     Z_level,
@@ -472,6 +656,4 @@ class PartialDependenceDisplay:
                 )
 
         return self
-
-
-        
+    
