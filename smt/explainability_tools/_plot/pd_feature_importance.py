@@ -1,6 +1,7 @@
 from .. import pd_feature_importance
 import numpy as np
 
+
 class PDFeatureImportanceDisplay:
     def __init__(self, importances, feature_names):
         self.importances = importances
@@ -10,9 +11,9 @@ class PDFeatureImportanceDisplay:
     def from_surrogate_model(
         cls,
         model,
-        X, 
+        x,
         *, 
-        features = None,
+        features=None,
         feature_names=None,
         sample_weight=None,
         categorical_features=None, 
@@ -20,16 +21,16 @@ class PDFeatureImportanceDisplay:
         grid_resolution=100,
         # uniform=True,
         method="uniform",
-        sorted=False,
+        sort=False,
         ratio_samples=None,
         figsize=None,
     ):
         if features is None:
-            features = [i for i in range(X.shape[1])]
+            features = [i for i in range(x.shape[1])]
 
         importances = pd_feature_importance(
             model,
-            X, 
+            x,
             features,
             sample_weight=sample_weight, 
             categorical_features=categorical_features, 
@@ -44,7 +45,7 @@ class PDFeatureImportanceDisplay:
             feature_names,
         )
         return display.plot(
-            sorted=sorted, 
+            sort=sort,
             figsize=figsize,
         )
     
@@ -52,10 +53,9 @@ class PDFeatureImportanceDisplay:
             self,
             *, 
             figsize=None,
-            sorted=False,
+            sort=False,
     ):
-        import matplotlib.pyplot as plt  
-        from matplotlib.gridspec import GridSpecFromSubplotSpec 
+        import matplotlib.pyplot as plt
         plt.rcParams.update({
             "text.usetex": False,
             "font.family": "serif",
@@ -64,7 +64,10 @@ class PDFeatureImportanceDisplay:
         })
 
         if figsize is None:
-            length = max(5, len(self.importances) * 0.6)
+            length = max(
+                5,
+                int(len(self.importances) * 0.6)
+            )
             width = 4
         else:
             length = figsize[0]
@@ -77,7 +80,7 @@ class PDFeatureImportanceDisplay:
         feature_names = np.array(feature_names)
         importances = np.array(self.importances)
 
-        if sorted:
+        if sort:
             vis_feature_names = feature_names[np.argsort(importances*-1)]
             vis_importances = importances[np.argsort(importances*-1)]
         else:
@@ -88,7 +91,7 @@ class PDFeatureImportanceDisplay:
         fig, ax = plt.subplots(1, 1, figsize=(length, width))
         ax.bar(indexes, vis_importances, color="blue", edgecolor='black', linewidth=0.8)
         ax.set_xticks(indexes)
-        ax.set_xticklabels(feature_names, fontsize=14)
+        ax.set_xticklabels(vis_feature_names, fontsize=14)
         ax.set_ylabel('Feature Importance', fontsize=14)
         ax.grid(color="black", alpha=0.2)
         ax.yaxis.set_tick_params(labelsize=14)

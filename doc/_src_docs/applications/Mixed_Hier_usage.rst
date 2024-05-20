@@ -62,7 +62,7 @@ The design space is then defined from a list of design variables and implements 
   
   # Sample the design space
   # Note: is_acting_sampled specifies for each design variable whether it is acting or not
-  x_sampled, is_acting_sampled = ds.sample_valid_x(100)
+  x_sampled, is_acting_sampled = ds.sample_valid_x(100, random_state=42)
   
   # Correct design vectors: round discrete variables, correct hierarchical variables
   x_corr, is_acting = ds.correct_get_acting(
@@ -122,7 +122,7 @@ The hierarchy relationships are specified after instantiating the design space:
   
   # Sample the design space
   # Note: is_acting_sampled specifies for each design variable whether it is acting or not
-  x_sampled, is_acting_sampled = ds.sample_valid_x(100)
+  x_sampled, is_acting_sampled = ds.sample_valid_x(100, random_state=42)
   
   # Correct design vectors: round discrete variables, correct hierarchical variables
   x_corr, is_acting = ds.correct_get_acting(
@@ -204,7 +204,7 @@ Example of sampling a mixed-discrete design space
   )
   
   num = 40
-  x, x_is_acting = design_space.sample_valid_x(num)
+  x, x_is_acting = design_space.sample_valid_x(num, random_state=42)
   
   cmap = colors.ListedColormap(cat_var.values)
   plt.scatter(x[:, 0], np.zeros(num), c=x[:, 1], cmap=cmap)
@@ -292,9 +292,9 @@ Example of mixed integer context usage
         # eval points. : 50
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0172906
+     Predicting - done. Time (sec):  0.0073097
      
-     Prediction time/pt. (sec) :  0.0003458
+     Prediction time/pt. (sec) :  0.0001462
      
   
 .. figure:: Mixed_Hier_usage_TestMixedInteger_run_mixed_integer_context_example.png
