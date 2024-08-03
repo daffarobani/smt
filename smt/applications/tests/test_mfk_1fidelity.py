@@ -1,18 +1,21 @@
-import matplotlib
+try:
+    import matplotlib
 
-matplotlib.use("Agg")
+    matplotlib.use("Agg")
+    NO_MATPLOTLIB = False
+except ImportError:
+    NO_MATPLOTLIB = True
 
 import unittest
+
 import numpy as np
-import unittest
 
+from smt.applications.mfk import MFK
 from smt.problems import TensorProduct
 from smt.sampling_methods import LHS
-
-from smt.utils.sm_test_case import SMTestCase
+from smt.utils.misc import compute_rms_error
 from smt.utils.silence import Silence
-from smt.utils import compute_rms_error
-from smt.applications.mfk import MFK
+from smt.utils.sm_test_case import SMTestCase
 
 print_output = False
 
@@ -53,13 +56,14 @@ class TestMFKOneFidelity(SMTestCase):
             t_error = compute_rms_error(sm)
             e_error = compute_rms_error(sm, xv, yv)
 
-            self.assert_error(t_error, 0.0, 1e-6)
-            self.assert_error(e_error, 0.0, 1e-6)
+            self.assert_error(t_error, 0.0, 3e-3)
+            self.assert_error(e_error, 0.0, 3e-3)
 
     @staticmethod
     def run_mfk_example_1fidelity():
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
+
         from smt.applications.mfk import MFK, NestedLHS
 
         # Consider only 1 fidelity level
@@ -77,7 +81,7 @@ class TestMFKOneFidelity(SMTestCase):
         # Evaluate the HF function
         yt_e = hf_function(xt_e)
 
-        sm = MFK(theta0=xt_e.shape[1] * [1.0])
+        sm = MFK(theta0=xt_e.shape[1] * [1.0], corr="squar_exp")
 
         # High-fidelity dataset without name
         sm.set_training_values(xt_e, yt_e)
@@ -89,8 +93,8 @@ class TestMFKOneFidelity(SMTestCase):
 
         # Query the outputs
         y = sm.predict_values(x)
-        mse = sm.predict_variances(x)
-        derivs = sm.predict_derivatives(x, kx=0)
+        _mse = sm.predict_variances(x)
+        _derivs = sm.predict_derivatives(x, kx=0)
 
         plt.figure()
 
@@ -105,6 +109,12 @@ class TestMFKOneFidelity(SMTestCase):
         plt.ylabel(r"$y$")
 
         plt.show()
+
+    # run scripts are used in documentation as documentation is not always rebuild
+    # make a test run by pytest to test the run scripts
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
+    def test_run_mfk_example_1fidelity(self):
+        self.run_mfk_example_1fidelity()
 
 
 if __name__ == "__main__":

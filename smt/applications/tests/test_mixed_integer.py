@@ -3,37 +3,194 @@ Created on Tue Oct 12 10:48:01 2021
 @author: psaves
 """
 
-import unittest
-import numpy as np
-import matplotlib
 import itertools
+import os
+import unittest
 
-matplotlib.use("Agg")
+import numpy as np
 
+try:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    NO_MATPLOTLIB = False
+except ImportError:
+    NO_MATPLOTLIB = True
+
+import smt.utils.design_space as ds
 from smt.applications.mixed_integer import (
     MixedIntegerContext,
-    MixedIntegerSamplingMethod,
     MixedIntegerKrigingModel,
+    MixedIntegerSamplingMethod,
 )
-from smt.problems import Sphere, HierarchicalGoldstein, HierarchicalNeuralNetwork
+from smt.problems import HierarchicalGoldstein, HierarchicalNeuralNetwork, Sphere
+from smt.sampling_methods import LHS
+from smt.surrogate_models import (
+    KPLS,
+    KPLSK,
+    KRG,
+    QP,
+    MixHrcKernelType,
+    MixIntKernelType,
+)
 from smt.utils.design_space import (
+    HAS_CONFIG_SPACE,
+    CategoricalVariable,
     DesignSpace,
     FloatVariable,
     IntegerVariable,
     OrdinalVariable,
-    CategoricalVariable,
-)
-from smt.sampling_methods import LHS
-from smt.surrogate_models import (
-    KRG,
-    KPLS,
-    QP,
-    MixIntKernelType,
-    MixHrcKernelType,
 )
 
 
 class TestMixedInteger(unittest.TestCase):
+    def test_periodic_mixed(self):
+        # Objective function
+        def f_obj(X):
+            """
+            s01 objective
+
+            Parameters
+            ----------
+            point: array_like
+                point to evaluate
+            """
+            design_space = DesignSpace(
+                [
+                    FloatVariable(0.0, 1.0),
+                    CategoricalVariable(
+                        values=[
+                            "1",
+                            "2",
+                            "3",
+                            "4",
+                            "5",
+                            "6",
+                            "7",
+                            "8",
+                            "9",
+                            "10",
+                            "11",
+                            "12",
+                            "13",
+                        ]
+                    ),
+                ]
+            )
+
+            PI = 3.14159265358979323846
+            fail = False
+            x = X[0]
+            #  caté 1
+            c = str(design_space.decode_values(X, i_dv=1)[1])
+            x = np.abs(x)
+            c1 = c == "1"
+            c2 = c == "2"
+            c3 = c == "3"
+            c4 = c == "4"
+            c5 = c == "5"
+            c6 = c == "6"
+            c7 = c == "7"
+            c8 = c == "8"
+            c9 = c == "9"
+            c10 = c == "10"
+            c11 = c == "11"
+            c12 = c == "12"
+            c13 = c == "13"
+
+            if np.size(c1) == (
+                np.sum(c1)
+                + np.sum(c2)
+                + np.sum(c3)
+                + np.sum(c4)
+                + np.sum(c5)
+                + np.sum(c6)
+                + np.sum(c7)
+                + np.sum(c8)
+                + np.sum(c9)
+                + np.sum(c10)
+                + np.sum(c11)
+                + np.sum(c12)
+                + np.sum(c13)
+            ):
+                u = (
+                    1 * c1
+                    + 2 * c2
+                    + 3 * c3
+                    + 4 * c4
+                    + 5 * c5
+                    + 6 * c6
+                    + 7 * c7
+                    + 8 * c8
+                    + 9 * c9
+                    + 10 * c10
+                    + 11 * c11
+                    + 12 * c12
+                    + 13 * c13
+                )
+                hu = (PI * (0.4 + u / 15)) * (c10 + c11 + c12 + c13) - u / 20
+                y = np.cos(3.5 * PI * x + hu)
+            else:
+                print("type error")
+                print(X)
+                fail = True
+            return (y, fail)
+
+        n_doe = 98
+
+        design_space = DesignSpace(
+            [
+                FloatVariable(0.0, 1.0),
+                CategoricalVariable(
+                    values=[
+                        "1",
+                        "2",
+                        "3",
+                        "4",
+                        "5",
+                        "6",
+                        "7",
+                        "8",
+                        "9",
+                        "10",
+                        "11",
+                        "12",
+                        "13",
+                    ]
+                ),
+            ]
+        )
+
+        sampling = MixedIntegerSamplingMethod(
+            LHS,
+            design_space,
+            criterion="ese",
+            random_state=42,
+            output_in_folded_space=True,
+        )
+        xdoe = sampling(n_doe)
+
+        y_doe = [f_obj(xdoe[i])[0] for i in range(len(xdoe))]
+        # Surrogate
+        for m in MixIntKernelType:
+            sm = MixedIntegerKrigingModel(
+                surrogate=KRG(
+                    design_space=design_space,
+                    categorical_kernel=m,
+                    theta0=[0.01],
+                    hyper_opt="Cobyla",
+                    corr="squar_sin_exp",
+                    n_start=5,
+                ),
+            )
+
+            sm.set_training_values(xdoe, np.array(y_doe))
+            if m in [MixIntKernelType.EXP_HOMO_HSPHERE, MixIntKernelType.CONT_RELAX]:
+                with self.assertRaises(ValueError):
+                    sm.train()
+            else:
+                sm.train()
+
     def test_krg_mixed_3D(self):
         design_space = DesignSpace(
             [
@@ -45,7 +202,7 @@ class TestMixedInteger(unittest.TestCase):
 
         mixint = MixedIntegerContext(design_space)
 
-        sm = mixint.build_kriging_model(KRG(print_prediction=False))
+        sm = mixint.build_kriging_model(KRG(hyper_opt="Cobyla", print_prediction=False))
         sampling = mixint.build_sampling_method()
 
         fun = Sphere(ndim=3)
@@ -73,7 +230,9 @@ class TestMixedInteger(unittest.TestCase):
 
         mixint = MixedIntegerContext(design_space)
         with self.assertRaises(ValueError):
-            sm = mixint.build_kriging_model(KRG(print_prediction=False, poly="linear"))
+            _sm = mixint.build_kriging_model(
+                KRG(hyper_opt="Cobyla", print_prediction=False, poly="linear")
+            )
 
     def test_qp_mixed_2D_INT(self):
         design_space = DesignSpace(
@@ -238,12 +397,10 @@ class TestMixedInteger(unittest.TestCase):
         )
 
         x = np.array([[2.6, 0.3, 0.5, 0.25, 0.45, 0.85, 3.1]])
-        self.assertEqual(
-            np.array_equal(
-                np.array([[2.6, 0, 1, 0, 0, 1, 3]]),
-                design_space.correct_get_acting(x)[0],
-            ),
-            True,
+        np.testing.assert_allclose(
+            np.array([[2.6, 0, 1, 0, 0, 1, 3]]),
+            design_space.correct_get_acting(x)[0],
+            atol=1e-9,
         )
 
     def test_cast_to_discrete_values_with_smooth_rounding_ordinal_values(self):
@@ -257,12 +414,10 @@ class TestMixedInteger(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(
-            np.array_equal(
-                np.array([[2.6, 0, 1, 0, 0, 1, 1]]),
-                design_space.correct_get_acting(x)[0],
-            ),
-            True,
+        np.testing.assert_allclose(
+            np.array([[2.6, 0, 1, 0, 0, 1, 1]]),
+            design_space.correct_get_acting(x)[0],
+            atol=1e-9,
         )
 
     def test_cast_to_discrete_values_with_hard_rounding_ordinal_values(self):
@@ -276,12 +431,10 @@ class TestMixedInteger(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(
-            np.array_equal(
-                np.array([[2.6, 0, 1, 0, 0, 1, 1]]),
-                design_space.correct_get_acting(x)[0],
-            ),
-            True,
+        np.testing.assert_allclose(
+            np.array([[2.6, 0, 1, 0, 0, 1, 1]]),
+            design_space.correct_get_acting(x)[0],
+            atol=1e-9,
         )
 
     def test_cast_to_discrete_values_with_non_integer_ordinal_values(self):
@@ -294,32 +447,37 @@ class TestMixedInteger(unittest.TestCase):
                 OrdinalVariable(["0", "3.5"]),
             ]
         )
-
-        self.assertEqual(
-            np.array_equal(
-                np.array([[2.6, 0, 1, 0, 0, 1, 1]]),
-                design_space.correct_get_acting(x)[0],
-            ),
-            True,
+        np.testing.assert_allclose(
+            np.array([[2.6, 0, 1, 0, 0, 1, 1]]),
+            design_space.correct_get_acting(x)[0],
+            atol=1e-9,
         )
 
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
     def test_examples(self):
         self.run_mixed_integer_lhs_example()
         self.run_mixed_integer_qp_example()
         self.run_mixed_integer_context_example()
         self.run_hierarchical_variables_Goldstein()
         self.run_mixed_discrete_design_space_example()
-        self.run_hierarchical_design_space_example()
+        self.run_mixed_gower_example()
+        self.run_mixed_homo_gaussian_example()
+        self.run_mixed_homo_hyp_example()
+        if ds.HAS_CONFIG_SPACE:
+            self.run_mixed_cs_example()
+            self.run_hierarchical_design_space_example()  # works only with config space impl
 
     def run_mixed_integer_lhs_example(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
         from matplotlib import colors
 
+        from smt.applications.mixed_integer import MixedIntegerSamplingMethod
+        from smt.sampling_methods import LHS
         from smt.utils.design_space import (
+            CategoricalVariable,
             DesignSpace,
             FloatVariable,
-            CategoricalVariable,
         )
 
         float_var = FloatVariable(0, 4)
@@ -333,18 +491,22 @@ class TestMixedInteger(unittest.TestCase):
         )
 
         num = 40
-        x, x_is_acting = design_space.sample_valid_x(num, random_state=42)
+        design_space.seed = 42
+        samp = MixedIntegerSamplingMethod(
+            LHS, design_space, criterion="ese", random_state=design_space.seed
+        )
+        x, x_is_acting = samp(num, return_is_acting=True)
 
         cmap = colors.ListedColormap(cat_var.values)
         plt.scatter(x[:, 0], np.zeros(num), c=x[:, 1], cmap=cmap)
         plt.show()
 
     def run_mixed_integer_qp_example(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
 
-        from smt.surrogate_models import QP
         from smt.applications.mixed_integer import MixedIntegerSurrogateModel
+        from smt.surrogate_models import QP
         from smt.utils.design_space import DesignSpace, IntegerVariable
 
         xt = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
@@ -374,13 +536,14 @@ class TestMixedInteger(unittest.TestCase):
 
     def run_mixed_integer_context_example(self):
         import matplotlib.pyplot as plt
-        from smt.surrogate_models import KRG
+
         from smt.applications.mixed_integer import MixedIntegerContext
+        from smt.surrogate_models import KRG
         from smt.utils.design_space import (
+            CategoricalVariable,
             DesignSpace,
             FloatVariable,
             IntegerVariable,
-            CategoricalVariable,
         )
 
         design_space = DesignSpace(
@@ -406,7 +569,7 @@ class TestMixedInteger(unittest.TestCase):
         yt = ftest(xt)
 
         # Surrogate
-        sm = mi_context.build_kriging_model(KRG())
+        sm = mi_context.build_kriging_model(KRG(hyper_opt="Cobyla"))
         sm.set_training_values(xt, yt)
         sm.train()
 
@@ -475,7 +638,11 @@ class TestMixedInteger(unittest.TestCase):
 
         n_doe = 15
         ds.seed = 42
-        Xt, is_acting = ds.sample_valid_x(n_doe, random_state=42)
+        samp = MixedIntegerSamplingMethod(
+            LHS, ds, criterion="ese", random_state=ds.seed
+        )
+        Xt, is_acting = samp(n_doe, return_is_acting=True)
+
         Yt = problem(Xt)
 
         sm = MixedIntegerKrigingModel(
@@ -483,6 +650,7 @@ class TestMixedInteger(unittest.TestCase):
                 design_space=ds,
                 categorical_kernel=MixIntKernelType.HOMO_HSPHERE,
                 hierarchical_kernel=MixHrcKernelType.ARC_KERNEL,
+                hyper_opt="Cobyla",
                 theta0=[1e-2],
                 corr="abs_exp",
                 n_start=10,
@@ -577,12 +745,15 @@ class TestMixedInteger(unittest.TestCase):
 
     def run_mixed_discrete_design_space_example(self):
         import numpy as np
+
+        from smt.applications.mixed_integer import MixedIntegerSamplingMethod
+        from smt.sampling_methods import LHS
         from smt.utils.design_space import (
+            CategoricalVariable,
             DesignSpace,
             FloatVariable,
             IntegerVariable,
             OrdinalVariable,
-            CategoricalVariable,
         )
 
         ds = DesignSpace(
@@ -602,7 +773,11 @@ class TestMixedInteger(unittest.TestCase):
 
         # Sample the design space
         # Note: is_acting_sampled specifies for each design variable whether it is acting or not
-        x_sampled, is_acting_sampled = ds.sample_valid_x(100, random_state=42)
+        ds.seed = 42
+        samp = MixedIntegerSamplingMethod(
+            LHS, ds, criterion="ese", random_state=ds.seed
+        )
+        x_sampled, is_acting_sampled = samp(100, return_is_acting=True)
 
         # Correct design vectors: round discrete variables, correct hierarchical variables
         x_corr, is_acting = ds.correct_get_acting(
@@ -617,12 +792,19 @@ class TestMixedInteger(unittest.TestCase):
 
     def run_hierarchical_design_space_example(self):
         import numpy as np
+
+        from smt.applications.mixed_integer import (
+            MixedIntegerKrigingModel,
+            MixedIntegerSamplingMethod,
+        )
+        from smt.sampling_methods import LHS
+        from smt.surrogate_models import KRG, MixHrcKernelType, MixIntKernelType
         from smt.utils.design_space import (
+            CategoricalVariable,
             DesignSpace,
             FloatVariable,
             IntegerVariable,
             OrdinalVariable,
-            CategoricalVariable,
         )
 
         ds = DesignSpace(
@@ -643,15 +825,37 @@ class TestMixedInteger(unittest.TestCase):
         # Declare that x1 is acting if x0 == A
         ds.declare_decreed_var(decreed_var=1, meta_var=0, meta_value="A")
 
+        # Nested hierarchy is possible: activate x2 if x1 == C or D
+        # Note: only if ConfigSpace is installed! pip install smt[cs]
+        ds.declare_decreed_var(decreed_var=2, meta_var=1, meta_value=["C", "D"])
+
+        # It is also possible to explicitly forbid two values from occurring simultaneously
+        # Note: only if ConfigSpace is installed! pip install smt[cs]
+        ds.add_value_constraint(
+            var1=0, value1="A", var2=2, value2=[0, 1]
+        )  # Forbid x0 == A && x2 == 0 or 1
+
+        # For quantitative variables, it is possible to specify order relation
+        ds.add_value_constraint(
+            var1=2, value1="<", var2=3, value2=">"
+        )  # Prevent x2 < x3
+
         # Sample the design space
         # Note: is_acting_sampled specifies for each design variable whether it is acting or not
-        x_sampled, is_acting_sampled = ds.sample_valid_x(100, random_state=42)
+        ds.seed = 42
+        samp = MixedIntegerSamplingMethod(
+            LHS, ds, criterion="ese", random_state=ds.seed
+        )
+        Xt, is_acting_sampled = samp(100, return_is_acting=True)
 
+        rng = np.random.default_rng(42)
+        Yt = 4 * rng.random(100) - 2 + Xt[:, 0] + Xt[:, 1] - Xt[:, 2] - Xt[:, 3]
         # Correct design vectors: round discrete variables, correct hierarchical variables
         x_corr, is_acting = ds.correct_get_acting(
             np.array(
                 [
                     [0, 0, 2, 0.25],
+                    [0, 2, 1, 0.75],
                     [1, 2, 1, 0.66],
                 ]
             )
@@ -663,7 +867,18 @@ class TestMixedInteger(unittest.TestCase):
             == np.array(
                 [
                     [True, True, True, True],
-                    [True, False, True, True],  # x1 is not acting if x0 != A
+                    [
+                        True,
+                        True,
+                        False,
+                        True,
+                    ],  # x2 is not acting if x1 != C or D (0 or 1)
+                    [
+                        True,
+                        False,
+                        False,
+                        True,
+                    ],  # x1 is not acting if x0 != A, and x2 is not acting because x1 is not acting
                 ]
             )
         )
@@ -672,22 +887,223 @@ class TestMixedInteger(unittest.TestCase):
             == np.array(
                 [
                     [0, 0, 2, 0.25],
-                    # x1 is not acting, so it is corrected ("imputed") to its non-acting value (0 for discrete vars)
-                    [1, 0, 1, 0.66],
+                    [0, 2, 0, 0.75],
+                    # x2 is not acting, so it is corrected ("imputed") to its non-acting value (0 for discrete vars)
+                    [1, 0, 0, 0.66],  # x1 and x2 are imputed
                 ]
             )
         )
 
+        sm = MixedIntegerKrigingModel(
+            surrogate=KRG(
+                design_space=ds,
+                categorical_kernel=MixIntKernelType.HOMO_HSPHERE,
+                hierarchical_kernel=MixHrcKernelType.ALG_KERNEL,
+                theta0=[1e-2],
+                hyper_opt="Cobyla",
+                corr="abs_exp",
+                n_start=5,
+            ),
+        )
+        sm.set_training_values(Xt, Yt)
+        sm.train()
+        y_s = sm.predict_values(Xt)[:, 0]
+        pred_RMSE = np.linalg.norm(y_s - Yt) / len(Yt)
+
+        y_sv = sm.predict_variances(Xt)[:, 0]
+        _var_RMSE = np.linalg.norm(y_sv) / len(Yt)
+        assert pred_RMSE < 1e-7
+        print("Pred_RMSE", pred_RMSE)
+
+        self._sm = sm  # to be ignored: just used for automated test
+
+    @unittest.skipIf(
+        not HAS_CONFIG_SPACE, "Hierarchy ConfigSpace dependency not installed"
+    )
+    def test_hierarchical_design_space_example(self):
+        self.run_hierarchical_design_space_example()
+        np.testing.assert_almost_equal(
+            self._sm.predict_values(
+                np.array(
+                    [
+                        [0, 2, 1, 0.75],
+                        [1, 2, 1, 0.66],
+                        [0, 2, 1, 0.75],
+                    ]
+                )
+            )[:, 0],
+            self._sm.predict_values(
+                np.array(
+                    [
+                        [0, 2, 2, 0.75],
+                        [1, 1, 2, 0.66],
+                        [0, 2, 0, 0.75],
+                    ]
+                )
+            )[:, 0],
+        )
+        self.assertTrue(
+            np.linalg.norm(
+                self._sm.predict_values(np.array([[0, 0, 2, 0.25]]))
+                - self._sm.predict_values(np.array([[0, 0, 2, 0.8]]))
+            )
+            > 1e-8
+        )
+
+    @unittest.skipIf(
+        not HAS_CONFIG_SPACE, "Hierarchy ConfigSpace dependency not installed"
+    )
+    def test_hierarchical_design_space_example_all_categorical_decreed(self):
+        ds = DesignSpace(
+            [
+                CategoricalVariable(
+                    ["A", "B"]
+                ),  # x0 categorical: A or B; order is not relevant
+                CategoricalVariable(
+                    ["C", "D", "E"]
+                ),  # x1 ordinal: C, D or E; order is relevant
+                CategoricalVariable(
+                    ["tata", "tutu", "toto"]
+                ),  # x2 integer between 0 and 2 (inclusive): 0, 1, 2
+                FloatVariable(0, 1),  # c3 continuous between 0 and 1
+            ]
+        )
+
+        # Declare that x1 is acting if x0 == A
+        ds.declare_decreed_var(decreed_var=1, meta_var=0, meta_value="A")
+
+        # Nested hierarchy is possible: activate x2 if x1 == C or D
+        # Note: only if ConfigSpace is installed! pip install smt[cs]
+        ds.declare_decreed_var(decreed_var=2, meta_var=1, meta_value=["C", "D"])
+
+        # It is also possible to explicitly forbid two values from occurring simultaneously
+        # Note: only if ConfigSpace is installed! pip install smt[cs]
+        # ds.add_value_constraint(
+        #    var1=0, value1="A", var2=2, value2=["tata","tutu"]
+        # )  # Forbid x0 == A && x2 == 0 or 1
+
+        # Sample the design space
+        # Note: is_acting_sampled specifies for each design variable whether it is acting or not
+        ds.seed = 42
+        samp = MixedIntegerSamplingMethod(
+            LHS, ds, criterion="ese", random_state=ds.seed
+        )
+        Xt, is_acting_sampled = samp(100, return_is_acting=True)
+
+        rng = np.random.default_rng(42)
+        Yt = 4 * rng.random(100) - 2 + Xt[:, 0] + Xt[:, 1] - Xt[:, 2] - Xt[:, 3]
+        # Correct design vectors: round discrete variables, correct hierarchical variables
+        x_corr, is_acting = ds.correct_get_acting(
+            np.array(
+                [
+                    [0, 0, 2, 0.25],
+                    [0, 2, 1, 0.75],
+                    [1, 2, 1, 0.66],
+                ]
+            )
+        )
+
+        # Observe the hierarchical behavior:
+        np.testing.assert_array_equal(
+            is_acting,
+            np.array(
+                [
+                    [True, True, True, True],
+                    [
+                        True,
+                        True,
+                        False,
+                        True,
+                    ],  # x2 is not acting if x1 != C or D (0 or 1)
+                    [
+                        True,
+                        False,
+                        False,
+                        True,
+                    ],  # x1 is not acting if x0 != A, and x2 is not acting because x1 is not acting
+                ]
+            ),
+        )
+
+        np.testing.assert_array_equal(
+            x_corr,
+            np.array(
+                [
+                    [0, 0, 2, 0.25],
+                    [0, 2, 0, 0.75],
+                    # x2 is not acting, so it is corrected ("imputed") to its non-acting value (0 for discrete vars)
+                    [1, 0, 0, 0.66],  # x1 and x2 are imputed
+                ]
+            ),
+        )
+
+        for mixint_kernel in [
+            MixIntKernelType.CONT_RELAX,
+            MixIntKernelType.GOWER,
+            MixIntKernelType.HOMO_HSPHERE,
+        ]:
+            sm = MixedIntegerKrigingModel(
+                surrogate=KRG(
+                    design_space=ds,
+                    categorical_kernel=mixint_kernel,
+                    hierarchical_kernel=MixHrcKernelType.ALG_KERNEL,
+                    theta0=[1e-2],
+                    hyper_opt="Cobyla",
+                    corr="abs_exp",
+                    n_start=5,
+                ),
+            )
+            sm.set_training_values(Xt, Yt)
+            sm.train()
+            y_s = sm.predict_values(Xt)[:, 0]
+            _pred_RMSE = np.linalg.norm(y_s - Yt) / len(Yt)
+
+            y_sv = sm.predict_variances(Xt)[:, 0]
+            _var_RMSE = np.linalg.norm(y_sv) / len(Yt)
+
+            np.testing.assert_almost_equal(
+                sm.predict_values(
+                    np.array(
+                        [
+                            [0, 2, 1, 0.75],
+                            [1, 2, 1, 0.66],
+                            [0, 2, 1, 0.75],
+                        ]
+                    )
+                )[:, 0],
+                sm.predict_values(
+                    np.array(
+                        [
+                            [0, 2, 2, 0.75],
+                            [1, 1, 2, 0.66],
+                            [0, 2, 0, 0.75],
+                        ]
+                    )
+                )[:, 0],
+            )
+            self.assertTrue(
+                np.linalg.norm(
+                    sm.predict_values(np.array([[0, 0, 2, 0.25]]))
+                    - sm.predict_values(np.array([[0, 0, 2, 0.8]]))
+                )
+                > 1e-8
+            )
+
     def run_hierarchical_variables_Goldstein(self):
         import numpy as np
-        from smt.utils.design_space import (
-            DesignSpace,
-            CategoricalVariable,
-            IntegerVariable,
-            FloatVariable,
+
+        from smt.applications.mixed_integer import (
+            MixedIntegerKrigingModel,
+            MixedIntegerSamplingMethod,
         )
-        from smt.applications.mixed_integer import MixedIntegerKrigingModel
-        from smt.surrogate_models import MixIntKernelType, MixHrcKernelType, KRG
+        from smt.sampling_methods import LHS
+        from smt.surrogate_models import KRG, MixHrcKernelType, MixIntKernelType
+        from smt.utils.design_space import (
+            CategoricalVariable,
+            DesignSpace,
+            FloatVariable,
+            IntegerVariable,
+        )
 
         def f_hv(X):
             import numpy as np
@@ -822,7 +1238,12 @@ class TestMixedInteger(unittest.TestCase):
 
         # Sample from the design spaces, correctly considering hierarchy
         n_doe = 15
-        Xt, Xt_is_acting = design_space.sample_valid_x(n_doe, random_state=42)
+        design_space.seed = 42
+        samp = MixedIntegerSamplingMethod(
+            LHS, design_space, criterion="ese", random_state=design_space.seed
+        )
+        Xt, Xt_is_acting = samp(n_doe, return_is_acting=True)
+
         Yt = f_hv(Xt)
 
         sm = MixedIntegerKrigingModel(
@@ -831,6 +1252,7 @@ class TestMixedInteger(unittest.TestCase):
                 categorical_kernel=MixIntKernelType.HOMO_HSPHERE,
                 hierarchical_kernel=MixHrcKernelType.ALG_KERNEL,  # ALG or ARC
                 theta0=[1e-2],
+                hyper_opt="Cobyla",
                 corr="abs_exp",
                 n_start=5,
             ),
@@ -838,11 +1260,12 @@ class TestMixedInteger(unittest.TestCase):
         sm.set_training_values(Xt, Yt, is_acting=Xt_is_acting)
         sm.train()
         y_s = sm.predict_values(Xt)[:, 0]
-        pred_RMSE = np.linalg.norm(y_s - Yt) / len(Yt)
+        _pred_RMSE = np.linalg.norm(y_s - Yt) / len(Yt)
 
         y_sv = sm.predict_variances(Xt)[:, 0]
-        var_RMSE = np.linalg.norm(y_sv) / len(Yt)
+        _var_RMSE = np.linalg.norm(y_sv) / len(Yt)
 
+    @unittest.skipIf(int(os.getenv("RUN_SLOW_TESTS", 0)) < 1, "too slow")
     def test_hierarchical_variables_NN(self):
         problem = HierarchicalNeuralNetwork()
         ds = problem.design_space
@@ -888,6 +1311,7 @@ class TestMixedInteger(unittest.TestCase):
                 categorical_kernel=MixIntKernelType.HOMO_HSPHERE,
                 hierarchical_kernel=MixHrcKernelType.ALG_KERNEL,
                 theta0=[1e-2],
+                hyper_opt="Cobyla",
                 corr="abs_exp",
                 n_start=5,
             ),
@@ -902,33 +1326,30 @@ class TestMixedInteger(unittest.TestCase):
         self.assertTrue(pred_RMSE < 1e-7)
         print("Pred_RMSE", pred_RMSE)
         self.assertTrue(var_RMSE < 1e-7)
-        self.assertTrue(
-            np.linalg.norm(
-                sm.predict_values(
-                    np.array(
-                        [
-                            [0, -1, -2, 8, 0, 2, 0, 0],
-                            [1, -1, -2, 16, 1, 2, 1, 0],
-                            [2, -1, -2, 32, 2, 2, 1, -2],
-                        ]
-                    )
-                )[:, 0]
-                - sm.predict_values(
-                    np.array(
-                        [
-                            [0, -1, -2, 8, 0, 2, 10, 10],
-                            [1, -1, -2, 16, 1, 2, 1, 10],
-                            [2, -1, -2, 32, 2, 2, 1, -2],
-                        ]
-                    )
-                )[:, 0]
-            )
-            < 1e-8
+        np.testing.assert_almost_equal(
+            sm.predict_values(
+                np.array(
+                    [
+                        [0, -1, -2, 0, 0, 2, 0, 0],
+                        [1, -1, -2, 1, 1, 2, 1, 0],
+                        [2, -1, -2, 2, 2, 2, 1, -2],
+                    ]
+                )
+            )[:, 0],
+            sm.predict_values(
+                np.array(
+                    [
+                        [0, -1, -2, 0, 0, 2, 10, 10],
+                        [1, -1, -2, 1, 1, 2, 1, 10],
+                        [2, -1, -2, 2, 2, 2, 1, -2],
+                    ]
+                )
+            )[:, 0],
         )
         self.assertTrue(
             np.linalg.norm(
-                sm.predict_values(np.array([[0, -1, -2, 8, 0, 2, 0, 0]]))
-                - sm.predict_values(np.array([[0, -1, -2, 8, 0, 12, 10, 10]]))
+                sm.predict_values(np.array([[0, -1, -2, 0, 0, 2, 0, 0]]))
+                - sm.predict_values(np.array([[0, -1, -2, 0, 0, 12, 10, 10]]))
             )
             > 1e-8
         )
@@ -948,8 +1369,52 @@ class TestMixedInteger(unittest.TestCase):
             surrogate=KRG(
                 design_space=design_space,
                 theta0=[1e-2],
+                hyper_opt="Cobyla",
                 corr="abs_exp",
                 categorical_kernel=MixIntKernelType.GOWER,
+            ),
+        )
+        sm.set_training_values(xt, yt)
+        sm.train()
+
+        # DOE for validation
+        x = np.linspace(0, 4, 5)
+        x2 = np.linspace(-5, 5, 21)
+        x1 = []
+        for element in itertools.product(x, x2):
+            x1.append(np.array(element))
+        x_pred = np.array(x1)
+
+        y = sm.predict_values(x_pred)
+        yvar = sm.predict_variances(x_pred)
+
+        # prediction are correct on known points
+        self.assertAlmostEqual(y[20, 0], 0)
+        self.assertAlmostEqual(y[50, 0], 1)
+        self.assertAlmostEqual(y[95, 0], 1.5)
+        self.assertTrue(np.abs(np.sum(np.array([y[20], y[50], y[95]]) - yt)) < 1e-6)
+        self.assertTrue(np.abs(np.sum(np.array([yvar[20], yvar[50], yvar[95]]))) < 1e-6)
+
+        self.assertEqual(np.shape(y), (105, 1))
+
+    def test_mixed_cs_2D(self):
+        xt = np.array([[0, 5], [2, -1], [4, 0.5]])
+        yt = np.array([[0.0], [1.0], [1.5]])
+        design_space = DesignSpace(
+            [
+                CategoricalVariable(["0.0", "1.0", " 2.0", "3.0", "4.0"]),
+                FloatVariable(-5, 5),
+            ]
+        )
+
+        # Surrogate
+        sm = MixedIntegerKrigingModel(
+            surrogate=KRG(
+                design_space=design_space,
+                theta0=[1e-2],
+                hyper_opt="Cobyla",
+                corr="abs_exp",
+                categorical_kernel=MixIntKernelType.COMPOUND_SYMMETRY,
             ),
         )
         sm.set_training_values(xt, yt)
@@ -990,6 +1455,7 @@ class TestMixedInteger(unittest.TestCase):
             surrogate=KRG(
                 design_space=design_space,
                 theta0=[1e-2],
+                hyper_opt="Cobyla",
                 corr="abs_exp",
                 categorical_kernel=MixIntKernelType.GOWER,
             ),
@@ -1034,6 +1500,130 @@ class TestMixedInteger(unittest.TestCase):
                 design_space=design_space,
                 theta0=[1e-2],
                 categorical_kernel=MixIntKernelType.CONT_RELAX,
+                hyper_opt="Cobyla",
+                corr="abs_exp",
+            ),
+        )
+        sm.set_training_values(xt, yt)
+        sm.train()
+
+        # DOE for validation
+        x = np.linspace(0, 4, 5)
+        x2 = np.linspace(-5, 5, 21)
+        x1 = []
+        for element in itertools.product(x, x2):
+            x1.append(np.array(element))
+        x_pred = np.array(x1)
+
+        y = sm.predict_values(x_pred)
+        yvar = sm.predict_variances(x_pred)
+
+        # prediction are correct on known points
+        self.assertTrue(np.abs(np.sum(np.array([y[20], y[50], y[95]]) - yt)) < 1e-6)
+        self.assertTrue(np.abs(np.sum(np.array([yvar[20], yvar[50], yvar[95]]))) < 1e-6)
+
+        self.assertEqual(np.shape(y), (105, 1))
+
+    def test_mixed_CR_PLS_2D(self):
+        xt = np.array([[0, 5], [2, -1], [4, 0.5]])
+        yt = np.array([[0.0], [1.0], [1.5]])
+        design_space = DesignSpace(
+            [
+                CategoricalVariable(["0.0", "1.0", " 2.0", "3.0", "4.0"]),
+                FloatVariable(-5, 5),
+            ]
+        )
+        # Surrogate
+        sm = MixedIntegerKrigingModel(
+            surrogate=KPLS(
+                n_comp=1,
+                eval_noise=False,
+                design_space=design_space,
+                theta0=[1e-2],
+                categorical_kernel=MixIntKernelType.CONT_RELAX,
+                hyper_opt="Cobyla",
+                corr="abs_exp",
+            ),
+        )
+        sm.set_training_values(xt, yt)
+        sm.train()
+
+        # DOE for validation
+        x = np.linspace(0, 4, 5)
+        x2 = np.linspace(-5, 5, 21)
+        x1 = []
+        for element in itertools.product(x, x2):
+            x1.append(np.array(element))
+        x_pred = np.array(x1)
+
+        y = sm.predict_values(x_pred)
+        yvar = sm.predict_variances(x_pred)
+
+        # prediction are correct on known points
+        self.assertTrue(np.abs(np.sum(np.array([y[20], y[50], y[95]]) - yt)) < 1e-6)
+        self.assertTrue(np.abs(np.sum(np.array([yvar[20], yvar[50], yvar[95]]))) < 1e-6)
+
+        self.assertEqual(np.shape(y), (105, 1))
+
+    def test_mixed_CR_KPLSK_2D(self):
+        xt = np.array([[0, 5], [2, -1], [4, 0.5]])
+        yt = np.array([[0.0], [1.0], [1.5]])
+        design_space = DesignSpace(
+            [
+                CategoricalVariable(["0.0", "1.0", " 2.0", "3.0", "4.0"]),
+                FloatVariable(-5, 5),
+            ]
+        )
+        # Surrogate
+        sm = MixedIntegerKrigingModel(
+            surrogate=KPLSK(
+                n_comp=1,
+                eval_noise=False,
+                design_space=design_space,
+                theta0=[1e-2],
+                categorical_kernel=MixIntKernelType.CONT_RELAX,
+                hyper_opt="Cobyla",
+                corr="abs_exp",
+            ),
+        )
+        sm.set_training_values(xt, yt)
+        sm.train()
+
+        # DOE for validation
+        x = np.linspace(0, 4, 5)
+        x2 = np.linspace(-5, 5, 21)
+        x1 = []
+        for element in itertools.product(x, x2):
+            x1.append(np.array(element))
+        x_pred = np.array(x1)
+
+        y = sm.predict_values(x_pred)
+        yvar = sm.predict_variances(x_pred)
+
+        # prediction are correct on known points
+        self.assertTrue(np.abs(np.sum(np.array([y[20], y[50], y[95]]) - yt)) < 1e-6)
+        self.assertTrue(np.abs(np.sum(np.array([yvar[20], yvar[50], yvar[95]]))) < 1e-6)
+
+        self.assertEqual(np.shape(y), (105, 1))
+
+    def test_mixed_GD_KPLSK_2D(self):
+        xt = np.array([[0, 5], [2, -1], [4, 0.5]])
+        yt = np.array([[0.0], [1.0], [1.5]])
+        design_space = DesignSpace(
+            [
+                CategoricalVariable(["0.0", "1.0", " 2.0", "3.0", "4.0"]),
+                FloatVariable(-5, 5),
+            ]
+        )
+        # Surrogate
+        sm = MixedIntegerKrigingModel(
+            surrogate=KPLSK(
+                n_comp=1,
+                eval_noise=False,
+                design_space=design_space,
+                theta0=[1e-2],
+                categorical_kernel=MixIntKernelType.GOWER,
+                hyper_opt="Cobyla",
                 corr="abs_exp",
             ),
         )
@@ -1073,6 +1663,7 @@ class TestMixedInteger(unittest.TestCase):
                 design_space=design_space,
                 theta0=[1e-2],
                 corr="abs_exp",
+                hyper_opt="Cobyla",
                 categorical_kernel=MixIntKernelType.EXP_HOMO_HSPHERE,
             ),
         )
@@ -1112,6 +1703,7 @@ class TestMixedInteger(unittest.TestCase):
                 design_space=design_space,
                 theta0=[1e-2],
                 categorical_kernel=MixIntKernelType.HOMO_HSPHERE,
+                hyper_opt="Cobyla",
                 corr="abs_exp",
             ),
         )
@@ -1147,7 +1739,7 @@ class TestMixedInteger(unittest.TestCase):
         )
 
         # Surrogate
-        sm = surrogate = KPLS(
+        sm = KPLS(
             design_space=design_space,
             theta0=[1e-2],
             n_comp=1,
@@ -1168,8 +1760,8 @@ class TestMixedInteger(unittest.TestCase):
 
         i = 0
         i += 1
-        y = sm.predict_values(x_pred)
-        yvar = sm.predict_variances(x_pred)
+        _y = sm.predict_values(x_pred)
+        _yvar = sm.predict_variances(x_pred)
 
         self.assertTrue((np.abs(np.sum(np.array(sm.predict_values(xt) - yt)))) < 1e-6)
         self.assertTrue((np.abs(np.sum(np.array(sm.predict_variances(xt) - 0)))) < 1e-6)
@@ -1190,6 +1782,7 @@ class TestMixedInteger(unittest.TestCase):
             design_space=design_space,
             theta0=[1e-2],
             n_comp=2,
+            hyper_opt="Cobyla",
             corr="abs_exp",
             cat_kernel_comps=[3],
             categorical_kernel=MixIntKernelType.EXP_HOMO_HSPHERE,
@@ -1208,8 +1801,8 @@ class TestMixedInteger(unittest.TestCase):
 
         i = 0
         i += 1
-        y = sm.predict_values(x_pred)
-        yvar = sm.predict_variances(x_pred)
+        _y = sm.predict_values(x_pred)
+        _yvar = sm.predict_variances(x_pred)
 
         self.assertTrue((np.abs(np.sum(np.array(sm.predict_values(xt) - yt)))) < 1e-6)
         self.assertTrue((np.abs(np.sum(np.array(sm.predict_variances(xt) - 0)))) < 1e-6)
@@ -1233,6 +1826,7 @@ class TestMixedInteger(unittest.TestCase):
                 n_comp=1,
                 categorical_kernel=MixIntKernelType.HOMO_HSPHERE,
                 cat_kernel_comps=[3],
+                hyper_opt="Cobyla",
                 corr="squar_exp",
             ),
         )
@@ -1249,14 +1843,90 @@ class TestMixedInteger(unittest.TestCase):
 
         i = 0
         i += 1
-        y = sm.predict_values(x_pred)
-        yvar = sm.predict_variances(x_pred)
+        _y = sm.predict_values(x_pred)
+        _yvar = sm.predict_variances(x_pred)
 
         self.assertTrue((np.abs(np.sum(np.array(sm.predict_values(xt) - yt)))) < 1e-6)
         self.assertTrue((np.abs(np.sum(np.array(sm.predict_variances(xt) - 0)))) < 1e-6)
 
+    def test_compound_hetero_noise_auto(self):
+        xt1 = np.array([[0, 0.0], [0, 2.0], [0, 4.0]])
+        xt2 = np.array([[1, 0.0], [1, 2.0], [1, 3.0]])
+        xt3 = np.array([[2, 1.0], [2, 2.0], [2, 4.0]])
+
+        xt = np.concatenate((xt1, xt2, xt3), axis=0)
+        xt[:, 1] = xt[:, 1].astype(np.float64)
+        yt1 = np.array([0.0, 9.0, 16.0])
+        yt2 = np.array([0.0, -4, -13.0])
+        yt3 = np.array([-10, 3, 11.0])
+        yt = np.concatenate((yt1, yt2, yt3), axis=0)
+
+        design_space = DesignSpace(
+            [
+                CategoricalVariable(["Blue", "Red", "Green"]),
+                # OrdinalVariable([0,1,2]),
+                FloatVariable(0, 4),
+            ]
+        )
+
+        # Surrogate
+        sm = MixedIntegerKrigingModel(
+            surrogate=KRG(
+                design_space=design_space,
+                categorical_kernel=MixIntKernelType.COMPOUND_SYMMETRY,
+                theta0=[1e-1],
+                corr="squar_exp",
+                n_start=20,
+                eval_noise=True,
+                #     noise0 = [1.0,0.1,10,0.01,1.0,0.1,10,0.01,10],
+                use_het_noise=True,
+                hyper_opt="Cobyla",
+            ),
+        )
+        sm.set_training_values(xt, yt)
+        sm.train()
+
+        # DOE for validation
+        n = 100
+        x_cat1 = []
+        x_cat2 = []
+        x_cat3 = []
+
+        for i in range(n):
+            x_cat1.append(0)
+            x_cat2.append(1)
+            x_cat3.append(2)
+
+        x_cont = np.linspace(0.0, 4.0, n)
+        x1 = np.concatenate(
+            (np.asarray(x_cat1).reshape(-1, 1), x_cont.reshape(-1, 1)), axis=1
+        )
+        x2 = np.concatenate(
+            (np.asarray(x_cat2).reshape(-1, 1), x_cont.reshape(-1, 1)), axis=1
+        )
+        x3 = np.concatenate(
+            (np.asarray(x_cat3).reshape(-1, 1), x_cont.reshape(-1, 1)), axis=1
+        )
+
+        _y1 = sm.predict_values(x1)
+        _y2 = sm.predict_values(x2)
+        _y3 = sm.predict_values(x3)
+
+        # estimated variance
+        _s2_1 = sm.predict_variances(x1)
+        _s2_2 = sm.predict_variances(x2)
+        _s2_3 = sm.predict_variances(x3)
+
+        self.assertEqual(
+            np.array_equal(
+                np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+                sm._surrogate.optimal_noise,
+            ),
+            True,
+        )
+
     def test_mixed_homo_gaussian_3D_ord_cate(self):
-        xt = np.array([[0.5, 0, 5], [2, 3, 4], [5, 2, -1], [-2, 4, 0.5]])
+        xt = np.array([[0, 5, 0], [2, 4, 3], [4, -1, 2], [2, 0.5, 1]])
         yt = np.array([[0.0], [3], [1.0], [1.5]])
         design_space = DesignSpace(
             [
@@ -1274,6 +1944,7 @@ class TestMixedInteger(unittest.TestCase):
                 n_comp=1,
                 categorical_kernel=MixIntKernelType.EXP_HOMO_HSPHERE,
                 cat_kernel_comps=[3, 2],
+                hyper_opt="Cobyla",
                 corr="squar_exp",
             ),
         )
@@ -1289,8 +1960,8 @@ class TestMixedInteger(unittest.TestCase):
             x1.append(np.array(element))
         x_pred = np.array(x1)
 
-        y = sm.predict_values(x_pred)
-        yvar = sm.predict_variances(x_pred)
+        _y = sm.predict_values(x_pred)
+        _yvar = sm.predict_variances(x_pred)
 
         # prediction are correct on known points
         self.assertTrue((np.abs(np.sum(np.array(sm.predict_values(xt) - yt)) < 1e-6)))
@@ -1307,7 +1978,11 @@ class TestMixedInteger(unittest.TestCase):
         mixint = MixedIntegerContext(design_space)
 
         sm = mixint.build_kriging_model(
-            KRG(categorical_kernel=MixIntKernelType.GOWER, print_prediction=False)
+            KRG(
+                categorical_kernel=MixIntKernelType.GOWER,
+                print_prediction=False,
+                hyper_opt="Cobyla",
+            )
         )
         sampling = mixint.build_sampling_method()
 
@@ -1323,14 +1998,16 @@ class TestMixedInteger(unittest.TestCase):
         self.assertTrue(eq_check)
 
     def run_mixed_gower_example(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
 
+        from smt.applications.mixed_integer import (
+            MixedIntegerKrigingModel,
+        )
         from smt.surrogate_models import KRG, MixIntKernelType
-        from smt.applications.mixed_integer import MixedIntegerKrigingModel
         from smt.utils.design_space import (
-            DesignSpace,
             CategoricalVariable,
+            DesignSpace,
             FloatVariable,
         )
 
@@ -1358,6 +2035,138 @@ class TestMixedInteger(unittest.TestCase):
                 design_space=design_space,
                 categorical_kernel=MixIntKernelType.GOWER,
                 theta0=[1e-1],
+                hyper_opt="Cobyla",
+                corr="squar_exp",
+                n_start=20,
+            ),
+        )
+        sm.set_training_values(xt, yt)
+        sm.train()
+
+        # DOE for validation
+        n = 100
+        x_cat1 = []
+        x_cat2 = []
+        x_cat3 = []
+
+        for i in range(n):
+            x_cat1.append(0)
+            x_cat2.append(1)
+            x_cat3.append(2)
+
+        x_cont = np.linspace(0.0, 4.0, n)
+        x1 = np.concatenate(
+            (np.asarray(x_cat1).reshape(-1, 1), x_cont.reshape(-1, 1)), axis=1
+        )
+        x2 = np.concatenate(
+            (np.asarray(x_cat2).reshape(-1, 1), x_cont.reshape(-1, 1)), axis=1
+        )
+        x3 = np.concatenate(
+            (np.asarray(x_cat3).reshape(-1, 1), x_cont.reshape(-1, 1)), axis=1
+        )
+
+        y1 = sm.predict_values(x1)
+        y2 = sm.predict_values(x2)
+        y3 = sm.predict_values(x3)
+
+        # estimated variance
+        s2_1 = sm.predict_variances(x1)
+        s2_2 = sm.predict_variances(x2)
+        s2_3 = sm.predict_variances(x3)
+
+        fig, axs = plt.subplots(3, figsize=(8, 6))
+
+        axs[0].plot(xt1[:, 1].astype(np.float64), yt1, "o", linestyle="None")
+        axs[0].plot(x_cont, y1, color="Blue")
+        axs[0].fill_between(
+            np.ravel(x_cont),
+            np.ravel(y1 - 3 * np.sqrt(s2_1)),
+            np.ravel(y1 + 3 * np.sqrt(s2_1)),
+            color="lightgrey",
+        )
+        axs[0].set_xlabel("x")
+        axs[0].set_ylabel("y")
+        axs[0].legend(
+            ["Training data", "Prediction", "Confidence Interval 99%"],
+            loc="upper left",
+            bbox_to_anchor=[0, 1],
+        )
+        axs[1].plot(
+            xt2[:, 1].astype(np.float64), yt2, marker="o", color="r", linestyle="None"
+        )
+        axs[1].plot(x_cont, y2, color="Red")
+        axs[1].fill_between(
+            np.ravel(x_cont),
+            np.ravel(y2 - 3 * np.sqrt(s2_2)),
+            np.ravel(y2 + 3 * np.sqrt(s2_2)),
+            color="lightgrey",
+        )
+        axs[1].set_xlabel("x")
+        axs[1].set_ylabel("y")
+        axs[1].legend(
+            ["Training data", "Prediction", "Confidence Interval 99%"],
+            loc="upper left",
+            bbox_to_anchor=[0, 1],
+        )
+        axs[2].plot(
+            xt3[:, 1].astype(np.float64), yt3, marker="o", color="r", linestyle="None"
+        )
+        axs[2].plot(x_cont, y3, color="Green")
+        axs[2].fill_between(
+            np.ravel(x_cont),
+            np.ravel(y3 - 3 * np.sqrt(s2_3)),
+            np.ravel(y3 + 3 * np.sqrt(s2_3)),
+            color="lightgrey",
+        )
+        axs[2].set_xlabel("x")
+        axs[2].set_ylabel("y")
+        axs[2].legend(
+            ["Training data", "Prediction", "Confidence Interval 99%"],
+            loc="upper left",
+            bbox_to_anchor=[0, 1],
+        )
+        plt.tight_layout()
+        plt.show()
+
+    def run_mixed_cs_example(self):
+        import matplotlib.pyplot as plt
+        import numpy as np
+
+        from smt.applications.mixed_integer import (
+            MixedIntegerKrigingModel,
+        )
+        from smt.surrogate_models import KRG, MixIntKernelType
+        from smt.utils.design_space import (
+            CategoricalVariable,
+            DesignSpace,
+            FloatVariable,
+        )
+
+        xt1 = np.array([[0, 0.0], [0, 2.0], [0, 4.0]])
+        xt2 = np.array([[1, 0.0], [1, 2.0], [1, 3.0]])
+        xt3 = np.array([[2, 1.0], [2, 2.0], [2, 4.0]])
+
+        xt = np.concatenate((xt1, xt2, xt3), axis=0)
+        xt[:, 1] = xt[:, 1].astype(np.float64)
+        yt1 = np.array([0.0, 9.0, 16.0])
+        yt2 = np.array([0.0, -4, -13.0])
+        yt3 = np.array([-10, 3, 11.0])
+        yt = np.concatenate((yt1, yt2, yt3), axis=0)
+
+        design_space = DesignSpace(
+            [
+                CategoricalVariable(["Blue", "Red", "Green"]),
+                FloatVariable(0, 4),
+            ]
+        )
+
+        # Surrogate
+        sm = MixedIntegerKrigingModel(
+            surrogate=KRG(
+                design_space=design_space,
+                categorical_kernel=MixIntKernelType.COMPOUND_SYMMETRY,
+                theta0=[1e-1],
+                hyper_opt="Cobyla",
                 corr="squar_exp",
                 n_start=20,
             ),
@@ -1451,14 +2260,14 @@ class TestMixedInteger(unittest.TestCase):
         plt.show()
 
     def run_mixed_homo_gaussian_example(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
 
-        from smt.surrogate_models import KRG, MixIntKernelType
         from smt.applications.mixed_integer import MixedIntegerKrigingModel
+        from smt.surrogate_models import KRG, MixIntKernelType
         from smt.utils.design_space import (
-            DesignSpace,
             CategoricalVariable,
+            DesignSpace,
             FloatVariable,
         )
 
@@ -1485,6 +2294,7 @@ class TestMixedInteger(unittest.TestCase):
             surrogate=KRG(
                 design_space=design_space,
                 theta0=[1e-1],
+                hyper_opt="Cobyla",
                 corr="squar_exp",
                 n_start=20,
                 categorical_kernel=MixIntKernelType.EXP_HOMO_HSPHERE,
@@ -1579,14 +2389,14 @@ class TestMixedInteger(unittest.TestCase):
         plt.show()
 
     def run_mixed_homo_hyp_example(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
 
-        from smt.surrogate_models import KRG, MixIntKernelType
         from smt.applications.mixed_integer import MixedIntegerKrigingModel
+        from smt.surrogate_models import KRG, MixIntKernelType
         from smt.utils.design_space import (
-            DesignSpace,
             CategoricalVariable,
+            DesignSpace,
             FloatVariable,
         )
 
@@ -1614,6 +2424,7 @@ class TestMixedInteger(unittest.TestCase):
                 design_space=design_space,
                 categorical_kernel=MixIntKernelType.HOMO_HSPHERE,
                 theta0=[1e-1],
+                hyper_opt="Cobyla",
                 corr="squar_exp",
                 n_start=20,
             ),

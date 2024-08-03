@@ -5,6 +5,7 @@ This package is distributed under New BSD license.
 """
 
 import numpy as np
+
 from smt.surrogate_models import KPLS
 from smt.utils.kriging import ge_compute_pls
 
@@ -31,6 +32,13 @@ class GEKPLS(KPLS):
             0,
             types=int,
             desc="Number of extra points per training point",
+        )
+        declare(
+            "hyper_opt",
+            "Cobyla",
+            values=("Cobyla"),
+            desc="Optimiser for hyperparameters optimisation",
+            types=str,
         )
         self.supports["training_derivatives"] = True
 

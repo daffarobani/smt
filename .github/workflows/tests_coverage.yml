@@ -12,12 +12,12 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python-version: ['3.8']
+        python-version: ['3.11']
 
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -27,20 +27,18 @@ jobs:
     - name: Install dependencies
       run: |
         pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r requirements.txt numpy==1.26.4 ConfigSpace==0.6.1
         pip list
         pip install -e .
 
-    - name: Check format with black
+    - name: Check with ruff
       run: |
-        black --version
-        black --diff smt
-        black --check smt
+        ruff --version
+        ruff check .
 
     - name: Test with pytest and coverage
       run: |
-        pip install coverage
-        RUN_SLOW=1 coverage run --source=smt -m pytest
+        RUN_SLOW_TESTS=1 pytest -v --durations=0 --cov=smt
 
     - name: Coveralls
       uses: AndreMiras/coveralls-python-action@develop

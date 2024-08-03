@@ -37,12 +37,15 @@ The design space is then defined from a list of design variables and implements 
 .. code-block:: python
 
   import numpy as np
+  
+  from smt.applications.mixed_integer import MixedIntegerSamplingMethod
+  from smt.sampling_methods import LHS
   from smt.utils.design_space import (
+      CategoricalVariable,
       DesignSpace,
       FloatVariable,
       IntegerVariable,
       OrdinalVariable,
-      CategoricalVariable,
   )
   
   ds = DesignSpace(
@@ -62,7 +65,11 @@ The design space is then defined from a list of design variables and implements 
   
   # Sample the design space
   # Note: is_acting_sampled specifies for each design variable whether it is acting or not
-  x_sampled, is_acting_sampled = ds.sample_valid_x(100, random_state=42)
+  ds.seed = 42
+  samp = MixedIntegerSamplingMethod(
+      LHS, ds, criterion="ese", random_state=ds.seed
+  )
+  x_sampled, is_acting_sampled = samp(100, return_is_acting=True)
   
   # Correct design vectors: round discrete variables, correct hierarchical variables
   x_corr, is_acting = ds.correct_get_acting(
@@ -88,18 +95,31 @@ The design space definition uses the framework of Audet et al. [2]_ to manage bo
 hierarchical variables. We distinguish dimensional (or meta) variables which are a special type of variables that may
 affect the dimension of the problem and decide if some other decreed variables are acting or non-acting.
 
+Additionally, it is also possible to define value constraints that explicitly forbid two variables from having some
+values simultaneously or for a continuous variable to be greater than another. 
+This can be useful for modeling incompatibility relationships: for example, engines can't be 
+installed on the back of the fuselage (vs on the wings) if a normal tail (vs T-tail) is selected. Note: this feature
+is only available if ConfigSpace has been installed: `pip install smt[cs]`
+
 The hierarchy relationships are specified after instantiating the design space:
 
 
 .. code-block:: python
 
   import numpy as np
+  
+  from smt.applications.mixed_integer import (
+      MixedIntegerKrigingModel,
+      MixedIntegerSamplingMethod,
+  )
+  from smt.sampling_methods import LHS
+  from smt.surrogate_models import KRG, MixHrcKernelType, MixIntKernelType
   from smt.utils.design_space import (
+      CategoricalVariable,
       DesignSpace,
       FloatVariable,
       IntegerVariable,
       OrdinalVariable,
-      CategoricalVariable,
   )
   
   ds = DesignSpace(
@@ -120,15 +140,37 @@ The hierarchy relationships are specified after instantiating the design space:
   # Declare that x1 is acting if x0 == A
   ds.declare_decreed_var(decreed_var=1, meta_var=0, meta_value="A")
   
+  # Nested hierarchy is possible: activate x2 if x1 == C or D
+  # Note: only if ConfigSpace is installed! pip install smt[cs]
+  ds.declare_decreed_var(decreed_var=2, meta_var=1, meta_value=["C", "D"])
+  
+  # It is also possible to explicitly forbid two values from occurring simultaneously
+  # Note: only if ConfigSpace is installed! pip install smt[cs]
+  ds.add_value_constraint(
+      var1=0, value1="A", var2=2, value2=[0, 1]
+  )  # Forbid x0 == A && x2 == 0 or 1
+  
+  # For quantitative variables, it is possible to specify order relation
+  ds.add_value_constraint(
+      var1=2, value1="<", var2=3, value2=">"
+  )  # Prevent x2 < x3
+  
   # Sample the design space
   # Note: is_acting_sampled specifies for each design variable whether it is acting or not
-  x_sampled, is_acting_sampled = ds.sample_valid_x(100, random_state=42)
+  ds.seed = 42
+  samp = MixedIntegerSamplingMethod(
+      LHS, ds, criterion="ese", random_state=ds.seed
+  )
+  Xt, is_acting_sampled = samp(100, return_is_acting=True)
   
+  rng = np.random.default_rng(42)
+  Yt = 4 * rng.random(100) - 2 + Xt[:, 0] + Xt[:, 1] - Xt[:, 2] - Xt[:, 3]
   # Correct design vectors: round discrete variables, correct hierarchical variables
   x_corr, is_acting = ds.correct_get_acting(
       np.array(
           [
               [0, 0, 2, 0.25],
+              [0, 2, 1, 0.75],
               [1, 2, 1, 0.66],
           ]
       )
@@ -140,7 +182,18 @@ The hierarchy relationships are specified after instantiating the design space:
       == np.array(
           [
               [True, True, True, True],
-              [True, False, True, True],  # x1 is not acting if x0 != A
+              [
+                  True,
+                  True,
+                  False,
+                  True,
+              ],  # x2 is not acting if x1 != C or D (0 or 1)
+              [
+                  True,
+                  False,
+                  False,
+                  True,
+              ],  # x1 is not acting if x0 != A, and x2 is not acting because x1 is not acting
           ]
       )
   )
@@ -149,11 +202,50 @@ The hierarchy relationships are specified after instantiating the design space:
       == np.array(
           [
               [0, 0, 2, 0.25],
-              # x1 is not acting, so it is corrected ("imputed") to its non-acting value (0 for discrete vars)
-              [1, 0, 1, 0.66],
+              [0, 2, 0, 0.75],
+              # x2 is not acting, so it is corrected ("imputed") to its non-acting value (0 for discrete vars)
+              [1, 0, 0, 0.66],  # x1 and x2 are imputed
           ]
       )
   )
+  
+  sm = MixedIntegerKrigingModel(
+      surrogate=KRG(
+          design_space=ds,
+          categorical_kernel=MixIntKernelType.HOMO_HSPHERE,
+          hierarchical_kernel=MixHrcKernelType.ALG_KERNEL,
+          theta0=[1e-2],
+          hyper_opt="Cobyla",
+          corr="abs_exp",
+          n_start=5,
+      ),
+  )
+  sm.set_training_values(Xt, Yt)
+  sm.train()
+  y_s = sm.predict_values(Xt)[:, 0]
+  pred_RMSE = np.linalg.norm(y_s - Yt) / len(Yt)
+  
+  y_sv = sm.predict_variances(Xt)[:, 0]
+  _var_RMSE = np.linalg.norm(y_sv) / len(Yt)
+  assert pred_RMSE < 1e-7
+  print("Pred_RMSE", pred_RMSE)
+  
+  self._sm = sm  # to be ignored: just used for automated test
+  
+::
+
+  ___________________________________________________________________________
+     
+   Evaluation
+     
+        # eval points. : 100
+     
+     Predicting ...
+     Predicting - done. Time (sec):  0.3548803
+     
+     Prediction time/pt. (sec) :  0.0035488
+     
+  Pred_RMSE 4.052163509443859e-13
   
 
 Design space and variable class references
@@ -183,14 +275,16 @@ Example of sampling a mixed-discrete design space
 
 .. code-block:: python
 
-  import numpy as np
   import matplotlib.pyplot as plt
+  import numpy as np
   from matplotlib import colors
   
+  from smt.applications.mixed_integer import MixedIntegerSamplingMethod
+  from smt.sampling_methods import LHS
   from smt.utils.design_space import (
+      CategoricalVariable,
       DesignSpace,
       FloatVariable,
-      CategoricalVariable,
   )
   
   float_var = FloatVariable(0, 4)
@@ -204,7 +298,11 @@ Example of sampling a mixed-discrete design space
   )
   
   num = 40
-  x, x_is_acting = design_space.sample_valid_x(num, random_state=42)
+  design_space.seed = 42
+  samp = MixedIntegerSamplingMethod(
+      LHS, design_space, criterion="ese", random_state=design_space.seed
+  )
+  x, x_is_acting = samp(num, return_is_acting=True)
   
   cmap = colors.ListedColormap(cat_var.values)
   plt.scatter(x[:, 0], np.zeros(num), c=x[:, 1], cmap=cmap)
@@ -234,13 +332,14 @@ Example of mixed integer context usage
 .. code-block:: python
 
   import matplotlib.pyplot as plt
-  from smt.surrogate_models import KRG
+  
   from smt.applications.mixed_integer import MixedIntegerContext
+  from smt.surrogate_models import KRG
   from smt.utils.design_space import (
+      CategoricalVariable,
       DesignSpace,
       FloatVariable,
       IntegerVariable,
-      CategoricalVariable,
   )
   
   design_space = DesignSpace(
@@ -266,7 +365,7 @@ Example of mixed integer context usage
   yt = ftest(xt)
   
   # Surrogate
-  sm = mi_context.build_kriging_model(KRG())
+  sm = mi_context.build_kriging_model(KRG(hyper_opt="Cobyla"))
   sm.set_training_values(xt, yt)
   sm.train()
   
@@ -292,9 +391,9 @@ Example of mixed integer context usage
         # eval points. : 50
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0045409
+     Predicting - done. Time (sec):  0.0182035
      
-     Prediction time/pt. (sec) :  0.0000908
+     Prediction time/pt. (sec) :  0.0003641
      
   
 .. figure:: Mixed_Hier_usage_TestMixedInteger_run_mixed_integer_context_example.png

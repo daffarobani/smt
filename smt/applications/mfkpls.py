@@ -10,9 +10,8 @@ Adapted on January 2021 by Andres Lopez-Lopera to the new SMT version
 """
 
 import numpy as np
-
 from sklearn.cross_decomposition import PLSRegression as pls
-from sklearn.metrics.pairwise import manhattan_distances
+from sklearn.metrics.pairwise import check_pairwise_arrays
 
 from smt.applications import MFK
 from smt.utils.kriging import componentwise_distance_PLS
@@ -34,6 +33,13 @@ class MFKPLS(MFK):
             desc="Correlation function type",
             types=(str),
         )
+        declare(
+            "hyper_opt",
+            "Cobyla",
+            values=("Cobyla"),
+            desc="Optimiser for hyperparameters optimisation",
+            types=str,
+        )
         declare("n_comp", 1, types=int, desc="Number of principal components")
         self.name = "MFKPLS"
 
@@ -42,7 +48,10 @@ class MFKPLS(MFK):
         Overrides differences function for MFK
         Compute the manhattan_distances
         """
-        return manhattan_distances(X, Y, sum_over_features=False)
+        X, Y = check_pairwise_arrays(X, Y)
+        D = X[:, np.newaxis, :] - Y[np.newaxis, :, :]
+        D = np.abs(D, D)
+        return D.reshape((-1, X.shape[1]))
 
     def _componentwise_distance(self, dx, opt=0):
         d = componentwise_distance_PLS(

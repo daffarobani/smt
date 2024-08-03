@@ -3,18 +3,17 @@ Author: Dr. John T. Hwang <hwangjt@umich.edu>
 
 This package is distributed under New BSD license.
 """
+
 import numpy as np
 from scipy.sparse import csc_matrix
-from smt.surrogate_models.surrogate_model import SurrogateModel
-
-from smt.utils.linear_solvers import get_solver
-from smt.utils.caching import cached_operation
 
 from smt.surrogate_models.rbfclib import PyRBF
+from smt.surrogate_models.surrogate_model import SurrogateModel
+from smt.utils.caching import cached_operation
+from smt.utils.linear_solvers import get_solver
 
 
 class RBF(SurrogateModel):
-
     """
     Radial basis function interpolant with global polynomial trend.
     """
@@ -197,7 +196,7 @@ class RBF(SurrogateModel):
 
     def _predict_output_derivatives(self, x):
         n = x.shape[0]
-        nt = self.nt
+        _nt = self.nt
         ny = self.training_points[None][0][1].shape[1]
         num = self.num
 

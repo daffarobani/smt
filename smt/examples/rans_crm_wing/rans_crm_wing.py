@@ -1,6 +1,5 @@
 import numpy as np
 
-
 raw = np.array(
     [
         [
@@ -339,8 +338,8 @@ def get_rans_crm_wing():
 
 
 def plot_rans_crm_wing(xt, yt, limits, interp):
-    import numpy as np
     import matplotlib
+    import numpy as np
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -356,9 +355,8 @@ def plot_rans_crm_wing(xt, yt, limits, interp):
 
     nrow = 3
     ncol = 2
-
     plt.close()
-    fig, axs = plt.subplots(3, 2, figsize=(15, 15))
+    fig, axs = plt.subplots(nrow, ncol, figsize=(15, 15))
 
     # -----------------------------------------------------------------------------
 

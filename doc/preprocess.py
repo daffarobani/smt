@@ -1,13 +1,13 @@
 """
 Author: Dr. John T. Hwang <hwangjt@umich.edu>
-        
+
 This package is distributed under New BSD license.
 """
 
 import os
 
-from preprocess_test import process_test
 from preprocess_options import process_options
+from preprocess_test import process_test
 
 
 def get_file_paths():

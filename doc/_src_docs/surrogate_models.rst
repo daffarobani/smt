@@ -4,21 +4,16 @@ Surrogate modeling methods
 SMT contains the surrogate modeling methods listed below.
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 3
    :titlesonly:
 
+   surrogate_models/ls
+   surrogate_models/qp
+   surrogate_models/gpr
    surrogate_models/rbf
    surrogate_models/idw
    surrogate_models/rmts
-   surrogate_models/ls
-   surrogate_models/qp
-   surrogate_models/krg
-   surrogate_models/kpls
-   surrogate_models/kplsk
-   surrogate_models/gekpls
    surrogate_models/genn
-   surrogate_models/mgp
-   surrogate_models/sgp
 
 
 Usage
@@ -26,8 +21,8 @@ Usage
 
 .. code-block:: python
 
-  import numpy as np
   import matplotlib.pyplot as plt
+  import numpy as np
   
   from smt.surrogate_models import RBF
   
@@ -67,13 +62,13 @@ Usage
      Training ...
         Initializing linear solver ...
            Performing LU fact. (5 x 5 mtx) ...
-           Performing LU fact. (5 x 5 mtx) - done. Time (sec):  0.0005710
-        Initializing linear solver - done. Time (sec):  0.0005817
+           Performing LU fact. (5 x 5 mtx) - done. Time (sec):  0.0000000
+        Initializing linear solver - done. Time (sec):  0.0000000
         Solving linear system (col. 0) ...
            Back solving (5 x 5 mtx) ...
-           Back solving (5 x 5 mtx) - done. Time (sec):  0.0003710
-        Solving linear system (col. 0) - done. Time (sec):  0.0003788
-     Training - done. Time (sec):  0.0013781
+           Back solving (5 x 5 mtx) - done. Time (sec):  0.0000000
+        Solving linear system (col. 0) - done. Time (sec):  0.0000000
+     Training - done. Time (sec):  0.0000000
   ___________________________________________________________________________
      
    Evaluation
@@ -81,9 +76,9 @@ Usage
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0000141
+     Predicting - done. Time (sec):  0.0000000
      
-     Prediction time/pt. (sec) :  0.0000001
+     Prediction time/pt. (sec) :  0.0000000
      
   
 .. figure:: surrogate_models_Test_test_rbf.png
@@ -112,6 +107,10 @@ All surrogate modeling methods implement the following API, though some of the f
   .. automethod:: smt.surrogate_models.surrogate_model.SurrogateModel.predict_output_derivatives
 
   .. automethod:: smt.surrogate_models.surrogate_model.SurrogateModel.predict_variances
+
+  .. automethod:: smt.surrogate_models.surrogate_model.SurrogateModel.predict_variance_derivatives
+
+  .. automethod:: smt.surrogate_models.surrogate_model.SurrogateModel.predict_variance_gradient
 
 
 How to save and load trained surrogate models

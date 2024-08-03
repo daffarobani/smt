@@ -1,13 +1,14 @@
 """
 Author: Dr. John T. Hwang <hwangjt@umich.edu>
-        
+
 This package is distributed under New BSD license.
 """
 
-import numpy as np
-import scipy.sparse.linalg
-import scipy.linalg
 import contextlib
+
+import numpy as np
+import scipy.linalg
+import scipy.sparse.linalg
 
 from smt.utils.options_dictionary import OptionsDictionary
 
@@ -50,7 +51,7 @@ def get_solver(solver):
         return solver
     elif solver == "null":
         return NullSolver()
-    elif solver == None:
+    elif solver is None:
         return None
 
 
@@ -138,7 +139,7 @@ class DenseCholeskySolver(LinearSolver):
     def _setup(self, mtx, printer, mg_matrices=[]):
         self.printer = printer
         with self._active(self.options["print_init"]) as printer:
-            self.mtx = mtx.A
+            self.mtx = mtx.todense()
             assert isinstance(self.mtx, np.ndarray), "mtx is of type %s" % type(mtx)
 
             with printer._timed_context(
@@ -262,25 +263,45 @@ class KrylovSolver(LinearSolver):
                 self.solver = scipy.sparse.linalg.cg
                 self.callback_func = self.callback._print_sol
                 self.solver_kwargs = {
-                    "atol": "legacy",
-                    "tol": self.options["atol"],
+                    "atol": 0.0,
+                    "rtol": self.options["rtol"],
                     "maxiter": self.options["ilimit"],
                 }
             elif self.options["solver"] == "bicgstab":
                 self.solver = scipy.sparse.linalg.bicgstab
                 self.callback_func = self.callback._print_sol
                 self.solver_kwargs = {
-                    "tol": self.options["atol"],
+                    "rtol": self.options["rtol"],
                     "maxiter": self.options["ilimit"],
                 }
             elif self.options["solver"] == "gmres":
                 self.solver = scipy.sparse.linalg.gmres
                 self.callback_func = self.callback._print_res
                 self.solver_kwargs = {
-                    "tol": self.options["atol"],
+                    "rtol": self.options["rtol"],
                     "maxiter": self.options["ilimit"],
                     "restart": min(self.options["ilimit"], mtx.shape[0]),
                 }
+            self._patch_when_scipy_lessthan_v111()
+
+    def _patch_when_scipy_lessthan_v111(self):
+        """
+        From scipy 1.11.0 release notes
+        The tol argument of scipy.sparse.linalg.{bcg,bicstab,cg,cgs,gcrotmk,gmres,lgmres,minres,qmr,tfqmr}
+        is now deprecated in favour of rtol and will be removed in SciPy 1.14.
+        Furthermore, the default value of atol for these functions is due to change to 0.0 in SciPy 1.14.
+        """
+        import scipy
+
+        scipy_version = scipy.__version__
+        version_tuple = tuple(map(int, scipy_version.split(".")))
+        is_greater_than_1_11 = version_tuple[0] > 1 or (
+            version_tuple[0] == 1 and version_tuple[1] >= 11
+        )
+
+        if not is_greater_than_1_11:
+            self.solver_kwargs["tol"] = self.solver_kwargs["rtol"]
+            del self.solver_kwargs["rtol"]
 
     def _solve(self, rhs, sol=None, ind_y=0):
         with self._active(self.options["print_solve"]) as printer:
@@ -299,7 +320,8 @@ class KrylovSolver(LinearSolver):
                 self.callback.rhs = rhs
 
                 self.callback._print_sol(sol)
-                tmp, info = self.solver(
+
+                tmp, _ = self.solver(
                     self.mtx,
                     rhs,
                     x0=sol,
@@ -487,7 +509,7 @@ class MultigridSolver(LinearSolver):
 
     def _smooth_and_interpolate(self, ind_level, ind_cycle, ind_y):
         mg_op = self.mg_ops[ind_level]
-        mtx = self.mg_mtx[ind_level]
+        _mtx = self.mg_mtx[ind_level]
         sol = self.mg_sol[ind_level]
         rhs = self.mg_rhs[ind_level]
         solver = self.mg_solvers[ind_level]
@@ -499,7 +521,7 @@ class MultigridSolver(LinearSolver):
         solver._solve(rhs, sol, ind_y)
 
     def _solve(self, rhs, sol=None, ind_y=0):
-        with self._active(self.options["print_solve"]) as printer:
+        with self._active(self.options["print_solve"]) as _printer:
             self.rhs = rhs
 
             if sol is None:

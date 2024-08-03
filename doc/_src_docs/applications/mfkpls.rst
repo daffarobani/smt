@@ -28,9 +28,10 @@ Usage
 
 .. code-block:: python
 
-  import numpy as np
   import matplotlib.pyplot as plt
-  from smt.applications.mfk import MFK, NestedLHS
+  import numpy as np
+  
+  from smt.applications.mfk import NestedLHS
   from smt.applications.mfkpls import MFKPLS
   
   # low fidelity model
@@ -74,8 +75,8 @@ Usage
   
   # query the outputs
   y = sm.predict_values(x)
-  mse = sm.predict_variances(x)
-  derivs = sm.predict_derivatives(x, kx=0)
+  _mse = sm.predict_variances(x)
+  _derivs = sm.predict_derivatives(x, kx=0)
   
   plt.figure()
   
@@ -108,7 +109,7 @@ Usage
    Training
      
      Training ...
-     Training - done. Time (sec):  0.0802529
+     Training - done. Time (sec):  0.1940961
   ___________________________________________________________________________
      
    Evaluation
@@ -116,9 +117,9 @@ Usage
         # eval points. : 101
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0003929
+     Predicting - done. Time (sec):  0.0000000
      
-     Prediction time/pt. (sec) :  0.0000039
+     Prediction time/pt. (sec) :  0.0000000
      
   ___________________________________________________________________________
      
@@ -127,9 +128,9 @@ Usage
         # eval points. : 101
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0011392
+     Predicting - done. Time (sec):  0.0000000
      
-     Prediction time/pt. (sec) :  0.0000113
+     Prediction time/pt. (sec) :  0.0000000
      
   
 .. figure:: mfkpls_TestMFKPLS_run_mfkpls_example.png
@@ -188,10 +189,10 @@ Options
      -  1.9
      -  None
      -  ['float']
-     -  Power for the pow_exp kernel function (valid values in (0.0, 2.0]), This option is set automatically when corr option is squar, abs, or matern.
+     -  Power for the pow_exp kernel function (valid values in (0.0, 2.0]).                 This option is set automatically when corr option is squar, abs, or matern.
   *  -  categorical_kernel
      -  MixIntKernelType.CONT_RELAX
-     -  [<MixIntKernelType.CONT_RELAX: 'CONT_RELAX'>, <MixIntKernelType.GOWER: 'GOWER'>, <MixIntKernelType.EXP_HOMO_HSPHERE: 'EXP_HOMO_HSPHERE'>, <MixIntKernelType.HOMO_HSPHERE: 'HOMO_HSPHERE'>]
+     -  [<MixIntKernelType.CONT_RELAX: 'CONT_RELAX'>, <MixIntKernelType.GOWER: 'GOWER'>, <MixIntKernelType.EXP_HOMO_HSPHERE: 'EXP_HOMO_HSPHERE'>, <MixIntKernelType.HOMO_HSPHERE: 'HOMO_HSPHERE'>, <MixIntKernelType.COMPOUND_SYMMETRY: 'COMPOUND_SYMMETRY'>]
      -  None
      -  The kernel to use for categorical inputs. Only for non continuous Kriging
   *  -  hierarchical_kernel
@@ -216,7 +217,7 @@ Options
      -  bounds for hyperparameters
   *  -  hyper_opt
      -  Cobyla
-     -  ['Cobyla', 'TNC']
+     -  ['Cobyla']
      -  ['str']
      -  Optimiser for hyperparameters optimisation
   *  -  eval_noise
@@ -254,6 +255,11 @@ Options
      -  None
      -  ['BaseDesignSpace', 'list', 'ndarray']
      -  definition of the (hierarchical) design space: use `smt.utils.design_space.DesignSpace` as the main API. Also accepts list of float variable bounds
+  *  -  random_state
+     -  41
+     -  None
+     -  ['NoneType', 'int', 'RandomState']
+     -  Numpy RandomState object or seed number which controls random draws                 for internal optim (set by default to get reproductibility)
   *  -  rho_regr
      -  constant
      -  ['constant', 'linear', 'quadratic']

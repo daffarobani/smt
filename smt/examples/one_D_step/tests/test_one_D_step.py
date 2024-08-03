@@ -1,22 +1,34 @@
 import unittest
 
-import matplotlib
+try:
+    import matplotlib
 
-matplotlib.use("Agg")
+    matplotlib.use("Agg")
+    NO_MATPLOTLIB = False
+except ImportError:
+    NO_MATPLOTLIB = True
 
 try:
-    from smt.surrogate_models import RMTB, RMTC
+    from smt.surrogate_models import RMTB, RMTC  # noqa: F401
 
-    compiled_available = True
-except:
-    compiled_available = False
+    NO_COMPILED = True
+except ImportError:
+    NO_COMPILED = False
 
 
 class Test(unittest.TestCase):
-    @unittest.skipIf(not compiled_available, "C compilation failed")
+    @unittest.skipIf(
+        NO_COMPILED or NO_MATPLOTLIB,
+        "C compilation failed or matplotlib not installed",
+    )
     def test_rmtb(self):
-        from smt.examples.one_D_step import run_one_D_step_rmtb
+        # just check import
+        from smt.examples.one_D_step import run_one_D_step_rmtb  # noqa: F401
 
-    @unittest.skipIf(not compiled_available, "C compilation failed")
+    @unittest.skipIf(
+        NO_COMPILED or NO_MATPLOTLIB,
+        "C compilation failed or matplotlib not installed",
+    )
     def test_rmtc(self):
-        from smt.examples.one_D_step import run_one_D_step_rmtc
+        # just check import
+        from smt.examples.one_D_step import run_one_D_step_rmtc  # noqa: F401

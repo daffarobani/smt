@@ -4,27 +4,26 @@ Author: Dr. John T. Hwang <hwangjt@umich.edu>
 This package is distributed under New BSD license.
 """
 
-import numpy as np
-import unittest
 import inspect
-
+import unittest
 from collections import OrderedDict
+
+import numpy as np
 
 from smt.problems import Sphere, TensorProduct
 from smt.sampling_methods import LHS
+from smt.surrogate_models import LS, QP
 from smt.utils.design_space import DesignSpace
-
-from smt.utils.sm_test_case import SMTestCase
+from smt.utils.misc import compute_rms_error
 from smt.utils.silence import Silence
-from smt.utils import compute_rms_error
-from smt.surrogate_models import LS, QP, KPLS, KRG
+from smt.utils.sm_test_case import SMTestCase
 
 try:
-    from smt.surrogate_models import IDW, RBF, RMTC, RMTB
+    from smt.surrogate_models import RMTB, RMTC
 
-    compiled_available = True
-except:
-    compiled_available = False
+    COMPILED_AVAILABLE = True
+except ImportError:
+    COMPILED_AVAILABLE = False
 
 
 print_output = False
@@ -45,7 +44,7 @@ class Test(SMTestCase):
         sms = OrderedDict()
         sms["LS"] = LS()
         sms["QP"] = QP()
-        if compiled_available:
+        if COMPILED_AVAILABLE:
             sms["RMTC"] = RMTC(num_elements=20, energy_weight=1e-10)
             sms["RMTB"] = RMTB(num_ctrl_pts=40, energy_weight=1e-10)
 
@@ -117,11 +116,11 @@ class Test(SMTestCase):
     def test_sphere_QP(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_sphere_RMTC(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_sphere_RMTB(self):
         self.run_test()
 
@@ -134,11 +133,11 @@ class Test(SMTestCase):
     def test_exp_QP(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_exp_RMTC(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_exp_RMTB(self):
         self.run_test()
 
@@ -151,11 +150,11 @@ class Test(SMTestCase):
     def test_tanh_QP(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_tanh_RMTC(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_tanh_RMTB(self):
         self.run_test()
 
@@ -168,11 +167,11 @@ class Test(SMTestCase):
     def test_cos_QP(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_cos_RMTC(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_cos_RMTB(self):
         self.run_test()
 

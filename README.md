@@ -4,7 +4,7 @@
 [![Tests](https://github.com/SMTOrg/smt/workflows/Tests/badge.svg)](https://github.com/SMTorg/smt/actions?query=workflow%3ATests)
 [![Coverage Status](https://coveralls.io/repos/github/SMTorg/smt/badge.svg?branch=master)](https://coveralls.io/github/SMTorg/smt?branch=master) 
 [![Documentation Status](https://readthedocs.org/projects/smt/badge/?version=latest)](https://smt.readthedocs.io/en/latest/?badge=latest)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 The surrogate modeling toolbox (SMT) is a Python package that contains a collection of surrogate modeling methods, sampling techniques, and benchmarking functions. This package provides a library of surrogate models that is simple to use and facilitates the implementation of additional methods.
 
@@ -15,16 +15,17 @@ SMT is documented using custom tools for embedding automatically-tested code and
 
 SMT is distributed under the New BSD license.
 
-To cite SMT 2.0: P. Saves and R. Lafage and N. Bartoli and Y. Diouane and J. H. Bussemaker and T. Lefebvre and J. T. Hwang and J. Morlier and J. R. R. A. Martins. SMT 2.0: A Surrogate Modeling Toolbox with a focus on Hierarchical and Mixed Variables Gaussian Processes. ArXiv preprint, 2023.
+To cite SMT 2.0: P. Saves and R. Lafage and N. Bartoli and Y. Diouane and J. H. Bussemaker and T. Lefebvre and J. T. Hwang and J. Morlier and J. R. R. A. Martins. SMT 2.0: A Surrogate Modeling Toolbox with a focus on Hierarchical and Mixed Variables Gaussian Processes. Advances in Engineering Software, 2024.
 
 ```
-@article{SMT2ArXiv,
-	Author = {P. Saves and R. Lafage and N. Bartoli and Y. Diouane and J. H. Bussemaker and T. Lefebvre and J. T. Hwang and J. Morlier and J. R. R. A. Martins},
-	Journal = {ArXiv preprint},	
-	Title = {{SMT} 2.0: A Surrogate Modeling Toolbox with a focus on Hierarchical and Mixed Variables Gaussian Processes},
-	Publisher = {ArXiv},		
-	doi = {https://doi.org/10.48550/arXiv.2305.13998},
-	Year = {2023}}
+@article{saves2024smt,
+         author = {P. Saves and R. Lafage and N. Bartoli and Y. Diouane and J. Bussemaker and T. Lefebvre and J. T. Hwang and J. Morlier and J. R. R. A. Martins},
+         title = {{SMT 2.0: A} Surrogate Modeling Toolbox with a focus on Hierarchical and Mixed Variables Gaussian Processes},
+         journal = {Advances in Engineering Sofware},
+         year = {2024},
+         volume = {188}, 
+         pages = {103571},
+         doi = {https://doi.org/10.1016/j.advengsoft.2023.103571}}
 ```
 
 To cite SMT legacy: M. A. Bouhlel and J. T. Hwang and N. Bartoli and R. Lafage and J. Morlier and J. R. R. A. Martins. A Python surrogate modeling framework with derivatives. Advances in Engineering Software, 2019.
@@ -41,7 +42,7 @@ To cite SMT legacy: M. A. Bouhlel and J. T. Hwang and N. Bartoli and R. Lafage a
 ```
 
 # Required packages
-SMT depends on the following modules: numpy, scipy, scikit-learn, pyDOE2 and Cython. 
+SMT depends on the following modules: numpy, scipy, scikit-learn, pyDOE3 and Cython. 
 
 # Installation
 If you want to install the latest release

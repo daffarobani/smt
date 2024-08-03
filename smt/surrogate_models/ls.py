@@ -7,15 +7,15 @@ This package is distributed under New BSD license.
 TO DO:
 - define outputs['sol'] = self.sol
 """
-import numpy as np
 
+import numpy as np
 from sklearn import linear_model
+
 from smt.surrogate_models.surrogate_model import SurrogateModel
 from smt.utils.caching import cached_operation
 
 
 class LS(SurrogateModel):
-
     """
     Least square model.
     This model uses the linear_model.LinearRegression class from scikit-learn.

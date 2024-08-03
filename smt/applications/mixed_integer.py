@@ -4,17 +4,19 @@ Author: Remi Lafage <remi.lafage@onera.fr>
 This package is distributed under New BSD license.
 """
 
+import warnings
+
 import numpy as np
-from smt.surrogate_models.surrogate_model import SurrogateModel
+
 from smt.sampling_methods.sampling_method import SamplingMethod
-from smt.utils.checks import ensure_2d_array
 from smt.surrogate_models.krg_based import KrgBased, MixIntKernelType
+from smt.surrogate_models.surrogate_model import SurrogateModel
+from smt.utils.checks import ensure_2d_array
 from smt.utils.design_space import (
     BaseDesignSpace,
     CategoricalVariable,
     ensure_design_space,
 )
-import warnings
 
 
 class MixedIntegerSamplingMethod(SamplingMethod):
@@ -38,30 +40,32 @@ class MixedIntegerSamplingMethod(SamplingMethod):
             specifying if doe output should be in folded space (enum indexes)
             or not (enum masks)
         """
-        warnings.warn(
-            "MixedIntegerSamplingMethod has been deprecated, use DesignSpace.sample_valid_x instead!",
-            category=DeprecationWarning,
-        )
-
         self._design_space = design_space
+        if "random_state" in kwargs:
+            self._design_space.random_state = kwargs["random_state"]
+        elif self._design_space.random_state is None:
+            self._design_space.random_state = 42
         self._unfolded_xlimits = design_space.get_unfolded_num_bounds()
         self._output_in_folded_space = kwargs.get("output_in_folded_space", True)
         kwargs.pop("output_in_folded_space", None)
         self._sampling_method = sampling_method_class(
             xlimits=self._unfolded_xlimits, **kwargs
         )
-        super().__init__()
+        super().__init__(xlimits=self._unfolded_xlimits)
 
-    def _compute(self, nt):
-        doe = self._sampling_method(nt)
+    def _compute(self, nt, return_is_acting=False):
+        x_doe, is_acting = self._design_space.sample_valid_x(
+            nt,
+            unfolded=not self._output_in_folded_space,
+            random_state=self._design_space.random_state,
+        )
+        if return_is_acting:
+            return x_doe, is_acting
+        else:
+            return x_doe
 
-        x_doe, _ = self._design_space.correct_get_acting(doe)
-        if self._output_in_folded_space:
-            x_doe, _ = self._design_space.fold_x(x_doe)
-        return x_doe
-
-    def __call__(self, nt):
-        return self._compute(nt)
+    def __call__(self, nt, return_is_acting=False):
+        return self._compute(nt, return_is_acting)
 
     def expand_lhs(self, x, nt, method="basic"):
         doe = self._sampling_method(nt)
@@ -98,7 +102,6 @@ class MixedIntegerSurrogateModel(SurrogateModel):
         """
         super().__init__()
         self._surrogate = surrogate
-
         if isinstance(self._surrogate, KrgBased):
             raise ValueError(
                 "Using MixedIntegerSurrogateModel integer model with "
@@ -110,7 +113,6 @@ class MixedIntegerSurrogateModel(SurrogateModel):
         self._input_in_folded_space = input_in_folded_space
         self.supports = self._surrogate.supports
         self.options["print_global"] = False
-
         if "poly" in self._surrogate.options:
             if self._surrogate.options["poly"] != "constant":
                 raise ValueError("constant regression must be used with mixed integer")
@@ -199,6 +201,12 @@ class MixedIntegerKrigingModel(KrgBased):
                 + " is not supported. Please use MixedIntegerSurrogateModel instead."
             )
         self.options["design_space"] = self._surrogate.design_space
+        if surrogate.options["hyper_opt"] == "TNC":
+            warnings.warn(
+                "TNC not available yet for mixed integer handling. Switching to Cobyla"
+            )
+
+        self._surrogate.options["hyper_opt"] = "Cobyla"
 
         self._input_in_folded_space = input_in_folded_space
         self.supports = self._surrogate.supports
@@ -216,11 +224,12 @@ class MixedIntegerKrigingModel(KrgBased):
             )
             and self._surrogate.options["categorical_kernel"] is None
         ):
-            self._surrogate.options[
-                "categorical_kernel"
-            ] = MixIntKernelType.HOMO_HSPHERE
+            self._surrogate.options["categorical_kernel"] = (
+                MixIntKernelType.HOMO_HSPHERE
+            )
             warnings.warn(
-                "Using MixedIntegerSurrogateModel integer model with Continuous Relaxation is not supported. Switched to homoscedastic hypersphere kernel instead."
+                "Using MixedIntegerSurrogateModel integer model with Continuous Relaxation is not supported. \
+                    Switched to homoscedastic hypersphere kernel instead."
             )
         if self._surrogate.options["categorical_kernel"] is not None:
             self._input_in_folded_space = False
@@ -259,7 +268,7 @@ class MixedIntegerKrigingModel(KrgBased):
         self._surrogate._train()
 
     def predict_values(self, x: np.ndarray, is_acting=None) -> np.ndarray:
-        x_corr, is_acting = self._get_x_for_surrogate_model(x)
+        x_corr, is_acting = self._get_x_for_surrogate_model(np.copy(x))
         return self._surrogate.predict_values(x_corr, is_acting=is_acting)
 
     def _predict_intermediate_values(
@@ -271,7 +280,7 @@ class MixedIntegerKrigingModel(KrgBased):
         )
 
     def predict_variances(self, x: np.ndarray, is_acting=None) -> np.ndarray:
-        x_corr, is_acting = self._get_x_for_surrogate_model(x)
+        x_corr, is_acting = self._get_x_for_surrogate_model(np.copy(x))
         return self._surrogate.predict_variances(x_corr, is_acting=is_acting)
 
     def predict_variances_all_levels(self, x: np.ndarray, is_acting=None) -> np.ndarray:
@@ -334,6 +343,13 @@ class MixedIntegerContext(object):
         Build MixedIntegerKrigingModel from given SMT surrogate model.
         """
         surrogate.options["design_space"] = self._design_space
+
+        if surrogate.options["hyper_opt"] == "TNC":
+            warnings.warn(
+                "TNC not available yet for mixed integer handling. Switching to Cobyla"
+            )
+
+        surrogate.options["hyper_opt"] = "Cobyla"
         return MixedIntegerKrigingModel(
             surrogate=surrogate,
             input_in_folded_space=self._work_in_folded_space,

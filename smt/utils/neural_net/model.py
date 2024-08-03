@@ -7,16 +7,14 @@ This package is distributed under New BSD license.
 """
 
 import numpy as np
-import matplotlib.gridspec as gridspec
-from smt.utils.neural_net.data import random_mini_batches
-from smt.utils.neural_net.optimizer import Adam
-from smt.utils.neural_net.activation import Tanh, Linear
+
+from smt.utils.neural_net.activation import Linear, Tanh
 from smt.utils.neural_net.bwd_prop import L_model_backward
-from smt.utils.neural_net.fwd_prop import L_model_forward, L_grads_forward
+from smt.utils.neural_net.data import load_csv, normalize_data, random_mini_batches
+from smt.utils.neural_net.fwd_prop import L_grads_forward, L_model_forward
 from smt.utils.neural_net.loss import lse
 from smt.utils.neural_net.metrics import rsquare
-from smt.utils.neural_net.data import normalize_data, load_csv
-
+from smt.utils.neural_net.optimizer import Adam
 
 # TODO: implement batch-norm (deeper networks might suffer from exploding/vanishing gradients during training)
 
@@ -49,11 +47,11 @@ def initialize_parameters(layer_dims=None):
 
     # Parameters
     parameters = {}
-    for l in range(1, number_layers + 1):
-        parameters["W" + str(l)] = np.random.randn(
-            layer_dims[l], layer_dims[l - 1]
-        ) * np.sqrt(1.0 / layer_dims[l - 1])
-        parameters["b" + str(l)] = np.zeros((layer_dims[l], 1))
+    for i in range(1, number_layers + 1):
+        parameters["W" + str(i)] = np.random.randn(
+            layer_dims[i], layer_dims[i - 1]
+        ) * np.sqrt(1.0 / layer_dims[i - 1])
+        parameters["b" + str(i)] = np.zeros((layer_dims[i], 1))
 
     return parameters
 
@@ -223,9 +221,9 @@ class Model(object):
 
                 # Compute average cost and print output
                 avg_cost = np.mean(optimizer.cost_history).squeeze()
-                self._training_history["epoch_" + str(e)][
-                    "batch_" + str(b)
-                ] = optimizer.cost_history
+                self._training_history["epoch_" + str(e)]["batch_" + str(b)] = (
+                    optimizer.cost_history
+                )
 
                 if not silent:
                     print(
@@ -265,7 +263,7 @@ class Model(object):
         for key, value in self._parameters.items():
             try:
                 print("{}: {}".format(key, str(value.tolist())))
-            except:
+            except AttributeError:
                 print("{}: {}".format(key, value))
 
     def print_training_history(self):
@@ -440,6 +438,7 @@ class Model(object):
         return J
 
     def goodness_of_fit(self, X_test, Y_test, J_test=None, response=0, partial=0):
+        import matplotlib.gridspec as gridspec
         import matplotlib.pyplot as plt
 
         assert X_test.shape[1] == Y_test.shape[1]
@@ -517,9 +516,9 @@ class Model(object):
         plt.xlabel("Absolute Prediction Error")
         plt.ylabel("Probability")
         plt.title(
-            "$\mu$="
+            "$\\mu$="
             + str(metrics["avg_error"])
-            + ", $\sigma=$"
+            + ", $\\sigma=$"
             + str(metrics["std_error"])
         )
         plt.grid(True)

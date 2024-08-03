@@ -30,12 +30,10 @@ Usage
 
   import matplotlib.pyplot as plt
   import numpy as np
-  from scipy import linalg
-  from smt.utils import compute_rms_error
   
-  from smt.problems import WaterFlowLFidelity, WaterFlow
-  from smt.sampling_methods import LHS
   from smt.applications import VFM
+  from smt.problems import WaterFlow, WaterFlowLFidelity
+  from smt.sampling_methods import LHS
   
   # Problem set up
   ndim = 8
@@ -50,7 +48,12 @@ Usage
   Bridge_candidate = "KRG"
   type_bridge = "Multiplicative"
   optionsLF = {}
-  optionsB = {"theta0": [1e-2] * ndim, "print_prediction": False, "deriv": False}
+  optionsB = {
+      "theta0": [1e-2] * ndim,
+      "print_prediction": False,
+      "deriv": False,
+      "hyper_opt": "Cobyla",
+  }
   
   # Construct low/high fidelity data and validation points
   sampling = LHS(xlimits=funLF.xlimits, criterion="m")
@@ -118,7 +121,7 @@ Usage
    Training
      
      Training ...
-     Training - done. Time (sec):  0.1498129
+     Training - done. Time (sec):  0.3157246
   
 .. figure:: vfm_TestVFM_run_vfm_example.png
   :scale: 80 %

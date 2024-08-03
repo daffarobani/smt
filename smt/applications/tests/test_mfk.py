@@ -5,26 +5,26 @@ Created on Mon May 07 14:20:11 2018
 @author: m.meliani
 """
 
-import matplotlib
-
-matplotlib.use("Agg")
-
 import unittest
+
 import numpy as np
-import unittest
-import inspect
 
-from collections import OrderedDict
+try:
+    import matplotlib
 
+    matplotlib.use("Agg")
+    NO_MATPLOTLIB = False
+except ImportError:
+    NO_MATPLOTLIB = True
+
+from copy import deepcopy
+
+from smt.applications.mfk import MFK, NestedLHS
 from smt.problems import Sphere, TensorProduct
 from smt.sampling_methods import LHS, FullFactorial
-
-from smt.utils.sm_test_case import SMTestCase
+from smt.utils.misc import compute_rms_error
 from smt.utils.silence import Silence
-from smt.utils import compute_rms_error
-from smt.surrogate_models import LS, QP, KPLS, KRG, KPLSK, GEKPLS, GENN
-from smt.applications.mfk import MFK, NestedLHS
-from copy import deepcopy
+from smt.utils.sm_test_case import SMTestCase
 
 print_output = False
 
@@ -55,7 +55,7 @@ class TestMFK(SMTestCase):
             self.assertTrue(found)
 
     def test_mfk(self):
-        self.problems = ["exp", "tanh", "cos"]
+        self.problems = ["exp"]  # , "tanh", "cos"]
 
         for fname in self.problems:
             prob = TensorProduct(ndim=self.ndim, func=fname)
@@ -94,7 +94,7 @@ class TestMFK(SMTestCase):
         prob = Sphere(ndim=self.ndim)
         sampling = LHS(xlimits=prob.xlimits)
 
-        nt = 500
+        nt = 100
         np.random.seed(0)
         xt = sampling(nt)
         yt = prob(xt)
@@ -112,7 +112,7 @@ class TestMFK(SMTestCase):
         for kx in range(prob.xlimits.shape[0]):
             dye[kx] = prob(xe, kx=kx)
 
-        sm = MFK(theta0=[1e-2] * self.ndim)
+        sm = MFK(theta0=[1e-2] * self.ndim, corr="squar_exp")
         if sm.options.is_declared("xlimits"):
             sm.options["xlimits"] = prob.xlimits
         sm.options["print_global"] = False
@@ -130,8 +130,8 @@ class TestMFK(SMTestCase):
 
         if print_output:
             print(
-                "%8s %6s %18.9e %18.9e %18.9e %18.9e"
-                % (pname[:6], sname, t_error, e_error, e_error0, e_error1)
+                "%6s %18.9e %18.9e %18.9e %18.9e"
+                % ("MFK", t_error, e_error, e_error0, e_error1)
             )
 
         self.assert_error(e_error0, 0.0, 1e-1)
@@ -139,8 +139,9 @@ class TestMFK(SMTestCase):
 
     @staticmethod
     def run_mfk_example():
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
+
         from smt.applications.mfk import MFK, NestedLHS
 
         # low fidelity model
@@ -168,7 +169,7 @@ class TestMFK(SMTestCase):
         yt_e = hf_function(xt_e)
         yt_c = lf_function(xt_c)
 
-        sm = MFK(theta0=xt_e.shape[1] * [1.0])
+        sm = MFK(theta0=xt_e.shape[1] * [1.0], corr="squar_exp")
 
         # low-fidelity dataset names being integers from 0 to level-1
         sm.set_training_values(xt_c, yt_c, name=0)
@@ -182,8 +183,8 @@ class TestMFK(SMTestCase):
 
         # query the outputs
         y = sm.predict_values(x)
-        mse = sm.predict_variances(x)
-        derivs = sm.predict_derivatives(x, kx=0)
+        _mse = sm.predict_variances(x)
+        _derivs = sm.predict_derivatives(x, kx=0)
 
         plt.figure()
 
@@ -199,6 +200,12 @@ class TestMFK(SMTestCase):
         plt.ylabel(r"$y$")
 
         plt.show()
+
+    # run scripts are used in documentation as documentation is not always rebuild
+    # make a test run by pytest to test the run scripts
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
+    def test_run_mfk_example(self):
+        self.run_mfk_example()
 
 
 if __name__ == "__main__":

@@ -8,36 +8,35 @@ order 1 (AR1)
 Adapted on January 2021 by Andres Lopez-Lopera to the new SMT version
 """
 
+import warnings
 from copy import deepcopy
 
 import numpy as np
-from scipy.linalg import solve_triangular
 from scipy import linalg
+from scipy.linalg import solve_triangular
 from scipy.spatial.distance import cdist
-
 from sklearn.cross_decomposition import PLSRegression as pls
 
+from smt.sampling_methods import LHS
 from smt.surrogate_models.krg_based import (
     KrgBased,
     MixIntKernelType,
+    compute_n_param,
 )
-
-from smt.sampling_methods import LHS
+from smt.utils.design_space import ensure_design_space
 from smt.utils.kriging import (
-    cross_distances,
     componentwise_distance,
+    compute_X_cont,
+    cross_distances,
+    cross_levels,
     differences,
     gower_componentwise_distances,
-    cross_levels,
-    compute_X_cont,
 )
 from smt.utils.misc import standardization
 
-from smt.surrogate_models.krg_based import compute_n_param
-
 
 class NestedLHS(object):
-    def __init__(self, nlevel, xlimits, random_state=None):
+    def __init__(self, nlevel, xlimits=None, design_space=None, random_state=None):
         """
         Constructor where values of options can be passed in.
 
@@ -49,19 +48,34 @@ class NestedLHS(object):
         xlimits : ndarray
             The interval of the domain in each dimension with shape (nx, 2)
 
+        design_space : DesignSpace
+            The design space with type and bounds for every design variable
+
         random_state : Numpy RandomState object or seed number which controls random draws
 
         """
         self.nlevel = nlevel
-        self.xlimits = xlimits
         self.random_state = random_state
+        if xlimits is None and design_space is None:
+            raise ValueError(
+                "Either xlimits or design_space should be specified to have bounds for the sampling."
+            )
+        elif xlimits is not None and design_space is not None:
+            raise ValueError(
+                "Use either design_space for mixed inputs or xlimits for continuous one. \
+                    Please avoid overspecification."
+            )
+        elif xlimits is not None:
+            self.design_space = ensure_design_space(xlimits=xlimits)
+        else:
+            self.design_space = design_space
 
     def __call__(self, nb_samples_hifi):
         """
         Builds nlevel nested design of experiments of dimension dim and size n_samples.
-        Each doe sis built with the optmized lhs procedure.
-        Builds the highest level first; nested properties are ensured by deleting
-        the nearest neighbours in lower levels of fidelity.
+        Each doe is built with an optmized LHS procedure.
+        The method builds the highest level first and
+        nested properties are ensured by deleting the nearest neighbours in lower levels of fidelity.
 
         Parameters
         ----------
@@ -81,18 +95,34 @@ class NestedLHS(object):
 
         if len(nt) != self.nlevel:
             raise ValueError("nt must be a list of nlevel elements")
-        if np.allclose(np.sort(nt)[::-1], nt) == False:
+        if not np.allclose(np.sort(nt)[::-1], nt):
             raise ValueError("nt must be a list of decreasing integers")
 
         doe = []
-        p0 = LHS(xlimits=self.xlimits, criterion="ese", random_state=self.random_state)
-        doe.append(p0(nt[0]))
+        p0 = LHS(
+            xlimits=np.array(self.design_space.get_unfolded_num_bounds()),
+            criterion="ese",
+            random_state=self.random_state,
+        )
+        p0nt0 = p0(nt[0])
+        if self.design_space:
+            p0nt0, _ = self.design_space.correct_get_acting(p0nt0)
+            p0nt0, _ = self.design_space.fold_x(p0nt0)
+
+        doe.append(p0nt0)
 
         for i in range(1, self.nlevel):
             p = LHS(
-                xlimits=self.xlimits, criterion="ese", random_state=self.random_state
+                xlimits=np.array(self.design_space.get_unfolded_num_bounds()),
+                criterion="ese",
+                random_state=self.random_state,
             )
-            doe.append(p(nt[i]))
+            pnti = p(nt[i])
+            if self.design_space:
+                pnti, _ = self.design_space.correct_get_acting(pnti)
+                pnti, _ = self.design_space.fold_x(pnti)
+
+            doe.append(pnti)
 
         for i in range(1, self.nlevel)[::-1]:
             ind = []
@@ -100,13 +130,13 @@ class NestedLHS(object):
             for j in range(doe[i].shape[0]):
                 dj = np.sort(d[j, :])
                 k = dj[0]
-                l = (np.where(d[j, :] == k))[0][0]
+                ll = (np.where(d[j, :] == k))[0][0]
                 m = 0
-                while l in ind:
+                while ll in ind:
                     m = m + 1
                     k = dj[m]
-                    l = (np.where(d[j, :] == k))[0][0]
-                ind.append(l)
+                    ll = (np.where(d[j, :] == k))[0][0]
+                ind.append(ll)
 
             doe[i - 1] = np.delete(doe[i - 1], ind, axis=0)
             doe[i - 1] = np.vstack((doe[i - 1], doe[i]))
@@ -159,13 +189,13 @@ class MFK(KrgBased):
         y : same as X
         """
 
-        if type(X) is not list:
+        if not isinstance(X, list):
             nlevel = 1
             X = [X]
         else:
             nlevel = len(X)
 
-        if type(y) is not list:
+        if not isinstance(y, list):
             y = [y]
 
         if len(X) != len(y):
@@ -212,7 +242,8 @@ class MFK(KrgBased):
         if self.name in ["MFKPLS", "MFKPLSK"]:
             _pls = pls(self.options["n_comp"])
 
-            # As of sklearn 0.24.1 PLS with zeroed outputs raises an exception while sklearn 0.23 returns zeroed x_rotations
+            # As of sklearn 0.24.1 PLS with zeroed outputs raises an exception
+            # while sklearn 0.23 returns zeroed x_rotations
             # For now the try/except below is a workaround to restore the 0.23 behaviour
             try:
                 # PLS is done on the highest fidelity identified by the key None
@@ -263,6 +294,9 @@ class MFK(KrgBased):
             _, self.cat_features = compute_X_cont(
                 np.concatenate(xt, axis=0), self.design_space
             )
+            self.X_offset[self.cat_features] *= 0
+            self.X_scale[self.cat_features] *= 0
+            self.X_scale[self.cat_features] += 1
 
         nlevel = self.nlvl
 
@@ -411,6 +445,7 @@ class MFK(KrgBased):
         self.nt = self.nt_all[lvl]
         self.q = self.q_all[lvl]
         self.p = self.p_all[lvl]
+        self.kplsk_second_loop = False
         (
             self.optimal_rlf_value[lvl],
             self.optimal_par[lvl],
@@ -479,9 +514,8 @@ class MFK(KrgBased):
         if self.is_continuous:
             dx = self._differences(X, Y=self.X_norma_all[0])
             d = self._componentwise_distance(dx)
-            r_ = self._correlation_types[self.options["corr"]](
-                self.optimal_theta[0], d
-            ).reshape(n_eval, self.nt_all[0])
+            self.corr.theta = self.optimal_theta[0]
+            r_ = self.corr(d).reshape(n_eval, self.nt_all[0])
         else:
             _, x_is_acting = self.design_space.correct_get_acting(X_usc)
             _, y_is_acting = self.design_space.correct_get_acting(self.X[0])
@@ -537,9 +571,8 @@ class MFK(KrgBased):
             if self.is_continuous:
                 dx = self._differences(X, Y=self.X_norma_all[i])
                 d = self._componentwise_distance(dx)
-                r_ = self._correlation_types[self.options["corr"]](
-                    self.optimal_theta[i], d
-                ).reshape(n_eval, self.nt_all[i])
+                self.corr.theta = self.optimal_theta[i]
+                r_ = self.corr(d).reshape(n_eval, self.nt_all[i])
             else:
                 _, x_is_acting = self.design_space.correct_get_acting(X_usc)
                 _, y_is_acting = self.design_space.correct_get_acting(self.X[i])
@@ -668,9 +701,8 @@ class MFK(KrgBased):
         if self.is_continuous:
             dx = self._differences(X, Y=self.X_norma_all[0])
             d = self._componentwise_distance(dx)
-            r_ = self._correlation_types[self.options["corr"]](
-                self.optimal_theta[0], d
-            ).reshape(n_eval, self.nt_all[0])
+            self.corr.theta = self.optimal_theta[0]
+            r_ = self.corr(d).reshape(n_eval, self.nt_all[0])
         else:
             _, y_is_acting = self.design_space.correct_get_acting(self.X[0])
             _, x_is_acting = self.design_space.correct_get_acting(X)
@@ -728,9 +760,7 @@ class MFK(KrgBased):
         sigma2 = self.optimal_par[0]["sigma2"] / self.y_std**2
         MSE[:, 0] = sigma2 * (
             # 1 + self.optimal_noise_all[0] - (r_t ** 2).sum(axis=0) + (u_ ** 2).sum(axis=0)
-            1
-            - (r_t**2).sum(axis=0)
-            + (u_**2).sum(axis=0)
+            1 - (r_t**2).sum(axis=0) + (u_**2).sum(axis=0)
         )
 
         # Calculate recursively kriging variance at level i
@@ -743,9 +773,8 @@ class MFK(KrgBased):
             if self.is_continuous:
                 dx = self._differences(X, Y=self.X_norma_all[i])
                 d = self._componentwise_distance(dx)
-                r_ = self._correlation_types[self.options["corr"]](
-                    self.optimal_theta[i], d
-                ).reshape(n_eval, self.nt_all[i])
+                self.corr.theta = self.optimal_theta[i]
+                r_ = self.corr(d).reshape(n_eval, self.nt_all[i])
             else:
                 _, y_is_acting = self.design_space.correct_get_acting(self.X[i])
                 _, x_is_acting = self.design_space.correct_get_acting(X)
@@ -814,7 +843,8 @@ class MFK(KrgBased):
                 Q_ = (np.dot((yt - np.dot(Ft, beta)).T, yt - np.dot(Ft, beta)))[0, 0]
                 MSE[:, i] = (
                     # sigma2_rho * MSE[:, i - 1]
-                    +Q_ / (2 * (self.nt_all[i] - p - q))
+                    +Q_
+                    / (2 * (self.nt_all[i] - p - q))
                     # * (1 + self.optimal_noise_all[i] - (r_t ** 2).sum(axis=0))
                     * (1 - (r_t**2).sum(axis=0))
                     + sigma2 * (u_**2).sum(axis=0)
@@ -822,9 +852,7 @@ class MFK(KrgBased):
             else:
                 MSE[:, i] = sigma2 * (
                     # 1 + self.optimal_noise_all[i] - (r_t ** 2).sum(axis=0) + (u_ ** 2).sum(axis=0)
-                    1
-                    - (r_t**2).sum(axis=0)
-                    + (u_**2).sum(axis=0)
+                    1 - (r_t**2).sum(axis=0) + (u_**2).sum(axis=0)
                 )  # + sigma2_rho * MSE[:, i - 1]
             if self.options["propagate_uncertainty"]:
                 MSE[:, i] = MSE[:, i] + sigma2_rho * MSE[:, i - 1]
@@ -884,9 +912,8 @@ class MFK(KrgBased):
         dx = self._differences(x, Y=self.X_norma_all[0])
         d = self._componentwise_distance(dx)
         # Compute the correlation function
-        r_ = self._correlation_types[self.options["corr"]](
-            self.optimal_theta[0], d
-        ).reshape(n_eval, self.nt_all[0])
+        self.corr.theta = self.optimal_theta[0]
+        r_ = self.corr(d).reshape(n_eval, self.nt_all[0])
 
         # Beta and gamma = R^-1(y-FBeta)
         beta = self.optimal_par[0]["beta"]
@@ -905,9 +932,8 @@ class MFK(KrgBased):
             g = self._regression_types[self.options["rho_regr"]](x)
             dx = self._differences(x, Y=self.X_norma_all[i])
             d = self._componentwise_distance(dx)
-            r_ = self._correlation_types[self.options["corr"]](
-                self.optimal_theta[i], d
-            ).reshape(n_eval, self.nt_all[i])
+            self.corr.theta = self.optimal_theta[i]
+            r_ = self.corr(d).reshape(n_eval, self.nt_all[i])
             df = np.vstack((g.T * dy_dx[:, i - 1], df0.T))
 
             beta = self.optimal_par[i]["beta"]
@@ -923,7 +949,8 @@ class MFK(KrgBased):
             # scaled predictor
             dy_dx[:, i] = np.ravel(df_dx - 2 * theta[kx] * np.dot(d_dx * r_, gamma))
 
-        return dy_dx[:, -1] * self.y_std / self.X_scale[kx]
+        deriv = dy_dx[:, -1] * self.y_std / self.X_scale[kx]
+        return deriv.reshape((x.shape[0], self.ny))
 
     def _get_theta(self, i):
         return self.optimal_theta[i]
@@ -952,7 +979,15 @@ class MFK(KrgBased):
                 raise ValueError(
                     "MFKPLSK only works with a squared exponential kernel (until we prove the contrary)"
                 )
-
+        # noise0 may be a list of noise values for various fi levels with various length
+        max_noise = np.max([np.max(row) for row in self.options["noise0"]])
+        if (self.options["eval_noise"] or max_noise > 1e-12) and self.options[
+            "hyper_opt"
+        ] == "TNC":
+            self.options["hyper_opt"] = "Cobyla"
+            warnings.warn(
+                "TNC not available yet for noise handling. Switching to Cobyla"
+            )
         n_param = d
 
         if self.options["categorical_kernel"] is not None:
@@ -993,7 +1028,8 @@ class MFK(KrgBased):
                     self.options["theta0"] *= np.ones((1, n_param))
                 else:
                     raise ValueError(
-                        "the length of theta0 (%s) should be equal to the number of dim (%s) or levels of fidelity (%s)."
+                        "the length of theta0 (%s) should be equal to the number of dim (%s) \
+                            or levels of fidelity (%s)."
                         % (len(self.options["theta0"]), n_param, self.nlvl)
                     )
             else:
@@ -1016,7 +1052,8 @@ class MFK(KrgBased):
                             self.options["noise0"][i] *= np.ones(self.nt_all[i])
                         else:
                             raise ValueError(
-                                "for the level of fidelity %s, the length of noise0 (%s) should be equal to the number of observations (%s)."
+                                "for the level of fidelity %s, the length of noise0 (%s) should be equal to \
+                                    the number of observations (%s)."
                                 % (i, len(self.options["noise0"][i]), self.nt_all[i])
                             )
             else:

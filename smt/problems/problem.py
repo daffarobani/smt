@@ -5,12 +5,14 @@ This package is distributed under New BSD license.
 
 Base class for benchmarking/test problems.
 """
+
 from typing import Optional
+
 import numpy as np
 
-from smt.utils.options_dictionary import OptionsDictionary
 from smt.utils.checks import ensure_2d_array
 from smt.utils.design_space import BaseDesignSpace, DesignSpace
+from smt.utils.options_dictionary import OptionsDictionary
 
 
 class Problem:

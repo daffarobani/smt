@@ -6,23 +6,27 @@ Created on Mon Mar 23 15:20:29 2020
 @author: ninamoello
 """
 
-from __future__ import print_function, division
-import numpy as np
+from __future__ import division, print_function
+
 import unittest
-from smt.utils.sm_test_case import SMTestCase
-from smt.utils.kriging import (
-    pow_exp,
-    abs_exp,
-    squar_exp,
-    act_exp,
-    cross_distances,
-    componentwise_distance,
-    matern52,
-    matern32,
-)
-from smt.utils.misc import standardization
+
+import numpy as np
+
 from smt.sampling_methods.lhs import LHS
 from smt.surrogate_models import KRG, MGP
+from smt.utils.kernels import (
+    ActExp,
+    Matern32,
+    Matern52,
+    PowExp,
+    SquarSinExp,
+)
+from smt.utils.kriging import (
+    componentwise_distance,
+    cross_distances,
+)
+from smt.utils.misc import standardization
+from smt.utils.sm_test_case import SMTestCase
 
 print_output = False
 
@@ -31,7 +35,7 @@ class Test(SMTestCase):
     def setUp(self):
         eps = 1e-8
         xlimits = np.asarray([[0, 1], [0, 1]])
-        self.random = np.random.RandomState(42)
+        self.random = np.random.RandomState(41)
         lhs = LHS(xlimits=xlimits, random_state=self.random)
         X = lhs(8)
         y = LHS(xlimits=np.asarray([[0, 1]]), random_state=self.random)(8)
@@ -45,8 +49,15 @@ class Test(SMTestCase):
             "act_exp",
             "matern32",
             "matern52",
+            "squar_sin_exp",
         ]
-        corr_def = [pow_exp, abs_exp, squar_exp, act_exp, matern32, matern52]
+        corr_def = [
+            PowExp,
+            ActExp,
+            Matern32,
+            Matern52,
+            SquarSinExp,
+        ]
         power_val = {
             "pow_exp": 1.9,
             "abs_exp": 1.0,
@@ -54,6 +65,7 @@ class Test(SMTestCase):
             "act_exp": 1.0,
             "matern32": 1.0,
             "matern52": 1.0,
+            "squar_sin_exp": 1.0,
         }
 
         self.eps = eps
@@ -80,14 +92,14 @@ class Test(SMTestCase):
         self.corr_def = corr_def
         self.power_val = power_val
 
-        def test_noise_estimation(self):
-            xt = np.array([[0.0], [1.0], [2.0], [3.0], [4.0]])
-            yt = np.array([0.0, 1.0, 1.5, 0.9, 1.0])
-            sm = KRG(hyper_opt="Cobyla", eval_noise=True, noise0=[1e-4])
+    def test_noise_estimation(self):
+        xt = np.array([[0.0], [1.0], [2.0], [3.0], [4.0]])
+        yt = np.array([0.0, 1.0, 1.5, 0.9, 1.0])
+        sm = KRG(hyper_opt="Cobyla", eval_noise=True, noise0=[1e-4])
 
-            sm.set_training_values(xt, yt)
-            sm.train()
-            self.assert_error(np.array(sm.optimal_theta), np.array([1.6]), 1e-1, 1e-1)
+        sm.set_training_values(xt, yt)
+        sm.train()
+        self.assert_error(np.array(sm.optimal_theta), np.array([1.6]), 1e-1, 1e-1)
 
     def test_corr_derivatives(self):
         for ind, corr in enumerate(self.corr_def):  # For every kernel
@@ -98,27 +110,32 @@ class Test(SMTestCase):
                 self.X.shape[1],
                 self.power_val[self.corr_str[ind]],
             )
+            if corr == SquarSinExp:
+                theta = self.random.rand(4)
+            else:
+                theta = self.theta
 
-            k = corr(self.theta, D)
+            kernel = corr(theta)
+            k = kernel(D)
             K = np.eye(self.X.shape[0])
             K[self.ij[:, 0], self.ij[:, 1]] = k[:, 0]
             K[self.ij[:, 1], self.ij[:, 0]] = k[:, 0]
             grad_norm_all = []
             diff_norm_all = []
             ind_theta = []
-            for i, theta_i in enumerate(self.theta):
-                eps_theta = np.zeros(self.theta.shape)
+            for i, theta_i in enumerate(theta):
+                eps_theta = np.zeros(theta.shape)
                 eps_theta[i] = self.eps
-
-                k_dk = corr(self.theta + eps_theta, D)
+                kernel.theta = theta + eps_theta
+                k_dk = kernel(D)
 
                 K_dk = np.eye(self.X.shape[0])
                 K_dk[self.ij[:, 0], self.ij[:, 1]] = k_dk[:, 0]
                 K_dk[self.ij[:, 1], self.ij[:, 0]] = k_dk[:, 0]
 
                 grad_eps = (K_dk - K) / self.eps
-
-                dk = corr(self.theta, D, grad_ind=i)
+                kernel.theta = theta
+                dk = kernel(D, grad_ind=i)
                 dK = np.zeros((self.X.shape[0], self.X.shape[0]))
                 dK[self.ij[:, 0], self.ij[:, 1]] = dk[:, 0]
                 dK[self.ij[:, 1], self.ij[:, 0]] = dk[:, 0]
@@ -139,40 +156,46 @@ class Test(SMTestCase):
                 self.power_val[self.corr_str[ind]],
             )
 
+            if corr == SquarSinExp:
+                theta = self.random.rand(4)
+            else:
+                theta = self.theta
+
             grad_norm_all = []
             diff_norm_all = []
-            for i, theta_i in enumerate(self.theta):
-                k = corr(self.theta, D, grad_ind=i)
+            for i, theta_i in enumerate(theta):
+                kernel = corr(theta)
+                k = kernel(D, grad_ind=i)
 
                 K = np.eye(self.X.shape[0])
                 K[self.ij[:, 0], self.ij[:, 1]] = k[:, 0]
                 K[self.ij[:, 1], self.ij[:, 0]] = k[:, 0]
-                for j, omega_j in enumerate(self.theta):
-                    eps_omega = np.zeros(self.theta.shape)
+                for j, omega_j in enumerate(theta):
+                    eps_omega = np.zeros(theta.shape)
                     eps_omega[j] = self.eps
-
-                    k_dk = corr(self.theta + eps_omega, D, grad_ind=i)
+                    kernel.theta = theta + eps_omega
+                    k_dk = kernel(D, grad_ind=i)
 
                     K_dk = np.eye(self.X.shape[0])
                     K_dk[self.ij[:, 0], self.ij[:, 1]] = k_dk[:, 0]
                     K_dk[self.ij[:, 1], self.ij[:, 0]] = k_dk[:, 0]
 
                     grad_eps = (K_dk - K) / self.eps
-
-                    dk = corr(self.theta, D, grad_ind=i, hess_ind=j)
+                    kernel.theta = theta
+                    dk = kernel(D, grad_ind=i, hess_ind=j)
                     dK = np.zeros((self.X.shape[0], self.X.shape[0]))
                     dK[self.ij[:, 0], self.ij[:, 1]] = dk[:, 0]
                     dK[self.ij[:, 1], self.ij[:, 0]] = dk[:, 0]
 
                     grad_norm_all.append(np.linalg.norm(dK))
                     diff_norm_all.append(np.linalg.norm(grad_eps))
-
             self.assert_error(
                 np.array(grad_norm_all), np.array(diff_norm_all), 1e-5, 1e-5
             )  # from utils/smt_test_case.py
 
     def test_likelihood_derivatives(self):
         for corr_str in [
+            "squar_sin_exp",
             "pow_exp",
             "abs_exp",
             "squar_exp",
@@ -181,14 +204,16 @@ class Test(SMTestCase):
             "matern52",
         ]:  # For every kernel
             for poly_str in ["constant", "linear", "quadratic"]:  # For every method
-                if corr_str == "act_exp":
-                    kr = MGP(print_global=False)
+                if corr_str == "squar_sin_exp":
+                    kr = KRG(print_global=False, corr=corr_str)
+                    theta = self.random.rand(4)
+                elif corr_str == "act_exp":
+                    kr = MGP(print_global=False, corr=corr_str)
                     theta = self.random.rand(4)
                 else:
-                    kr = KRG(print_global=False)
+                    kr = KRG(print_global=False, corr=corr_str)
                     theta = self.theta
                 kr.options["poly"] = poly_str
-                kr.options["corr"] = corr_str
                 kr.options["pow_exp_power"] = self.power_val[corr_str]
                 kr.set_training_values(self.X, self.y)
                 kr.train()
@@ -207,9 +232,8 @@ class Test(SMTestCase):
                     dred_dk = (red_dk - red) / self.eps
 
                     grad_norm_all.append(grad_red[i])
-                    diff_norm_all.append(float(dred_dk))
+                    diff_norm_all.append(float(dred_dk.item()))
                     ind_theta.append(r"$x_%d$" % i)
-
                 grad_norm_all = np.atleast_2d(grad_norm_all)
                 diff_norm_all = np.atleast_2d(diff_norm_all).T
                 self.assert_error(
@@ -224,16 +248,19 @@ class Test(SMTestCase):
             "act_exp",
             "matern32",
             "matern52",
+            "squar_sin_exp",
         ]:  # For every kernel
             for poly_str in ["constant", "linear", "quadratic"]:  # For every method
-                if corr_str == "act_exp":
-                    kr = MGP(print_global=False)
+                if corr_str == "squar_sin_exp":
+                    kr = KRG(print_global=False, corr=corr_str)
+                    theta = self.random.rand(4)
+                elif corr_str == "act_exp":
+                    kr = MGP(print_global=False, corr=corr_str)
                     theta = self.random.rand(4)
                 else:
-                    kr = KRG(print_global=False)
+                    kr = KRG(print_global=False, corr=corr_str)
                     theta = self.theta
                 kr.options["poly"] = poly_str
-                kr.options["corr"] = corr_str
                 kr.options["pow_exp_power"] = self.power_val[corr_str]
                 kr.set_training_values(self.X, self.y)
                 kr.train()
@@ -271,15 +298,16 @@ class Test(SMTestCase):
 
     def test_variance_derivatives(self):
         for corr_str in [
+            "squar_sin_exp",
             "abs_exp",
             "squar_exp",
             "matern32",
             "matern52",
             "pow_exp",
         ]:
-            kr = KRG(print_global=False)
+            self.setUp()
+            kr = KRG(print_global=False, corr=corr_str)
             kr.options["poly"] = "constant"
-            kr.options["corr"] = corr_str
             kr.options["pow_exp_power"] = self.power_val[corr_str]
             kr.set_training_values(self.X, self.y)
             kr.train()
@@ -295,8 +323,8 @@ class Test(SMTestCase):
             for i in range(np.shape(x_valid)[0]):
                 l0 = kr.predict_variance_derivatives(np.atleast_2d(x_valid[i]), 0)[0]
                 l1 = kr.predict_variance_derivatives(np.atleast_2d(x_valid[i]), 1)[0]
-                y_jacob[0, i] = l0
-                y_jacob[1, i] = l1
+                y_jacob[0, i] = l0.item()
+                y_jacob[1, i] = l1.item()
 
             diff_g = (y_predicted[1] - y_predicted[2]) / (2 * e)
             diff_d = (y_predicted[3] - y_predicted[4]) / (2 * e)

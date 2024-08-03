@@ -4,19 +4,19 @@ Author: Dr. Mohamed Amine Bouhlel <mbouhlel@umich.edu>, R. Lafage
 This package is distributed under New BSD license.
 """
 
+from smt.surrogate_models import GEKPLS, KPLS, KPLSK, KRG, LS, MGP, QP
 from smt.utils.options_dictionary import OptionsDictionary
-from smt.surrogate_models import LS, QP, KPLS, KRG, KPLSK, GEKPLS, MGP
 
 try:
-    from smt.surrogate_models import IDW, RBF, RMTC, RMTB
+    from smt.surrogate_models import IDW, RBF, RMTB, RMTC
 
-    compiled_available = True
-except:
-    compiled_available = False
+    COMPILED_AVAILABLE = True
+except ImportError:
+    COMPILED_AVAILABLE = False
 
 
 class SurrogateBasedApplication:
-    if compiled_available:
+    if COMPILED_AVAILABLE:
         _surrogate_type = {
             "KRG": KRG,
             "LS": LS,

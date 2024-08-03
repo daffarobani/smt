@@ -4,28 +4,26 @@ Author: Dr. John T. Hwang <hwangjt@umich.edu>
 This package is distributed under New BSD license.
 """
 
-import numpy as np
-import unittest
 import inspect
-
+import unittest
 from collections import OrderedDict
 
-from smt.problems import Sphere
-from smt.sampling_methods import LHS
-
-from smt.utils.sm_test_case import SMTestCase
-from smt.utils.silence import Silence
-from smt.utils import compute_rms_error
-from smt.utils.design_space import DesignSpace
+import numpy as np
 
 from smt.applications import MFK
+from smt.problems import Sphere
+from smt.sampling_methods import LHS
+from smt.utils.design_space import DesignSpace
+from smt.utils.misc import compute_rms_error
+from smt.utils.silence import Silence
+from smt.utils.sm_test_case import SMTestCase
 
 try:
-    from smt.surrogate_models import IDW, RBF, RMTC, RMTB
+    from smt.surrogate_models import RBF, RMTB, RMTC
 
-    compiled_available = True
-except:
-    compiled_available = False
+    COMPILED_AVAILABLE = True
+except ImportError:
+    COMPILED_AVAILABLE = False
 
 
 print_output = False
@@ -41,7 +39,7 @@ class Test(SMTestCase):
         problems["sphere"] = Sphere(ndim=ndim)
 
         sms = OrderedDict()
-        if compiled_available:
+        if COMPILED_AVAILABLE:
             sms["RBF"] = RBF()
             sms["RMTC"] = RMTC()
             sms["RMTB"] = RMTB()
@@ -106,15 +104,15 @@ class Test(SMTestCase):
     # --------------------------------------------------------------------
     # Function: sphere
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_sphere_RBF(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_sphere_RMTC(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_sphere_RMTB(self):
         self.run_test()
 

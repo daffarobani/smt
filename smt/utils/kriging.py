@@ -3,17 +3,16 @@ Author: Dr. Mohamed A. Bouhlel <mbouhlel@umich.edu>
 
 This package is distributed under New BSD license.
 """
-import warnings
-import numpy as np
-from enum import Enum
-from copy import deepcopy
+
 import os
+from enum import Enum
+
+import numpy as np
+from pyDOE3 import bbdesign
 from sklearn.cross_decomposition import PLSRegression as pls
-
-from pyDOE2 import bbdesign
 from sklearn.metrics.pairwise import check_pairwise_arrays
-from smt.utils.design_space import BaseDesignSpace, CategoricalVariable
 
+from smt.utils.design_space import CategoricalVariable
 
 USE_NUMBA_JIT = int(os.getenv("USE_NUMBA_JIT", 0))
 prange = range
@@ -156,10 +155,10 @@ def cross_levels(X, ij, design_space, y=None):
 def _cross_levels_mat(n_var, n, X_cat, ij):
     Lij = np.zeros((n_var, n, 2))
     for k in prange(n_var):
-        for l in prange(n):
-            i, j = ij[l]
-            Lij[k][l][0] = X_cat[i, k]
-            Lij[k][l][1] = X_cat[j, k]
+        for ll in prange(n):
+            i, j = ij[ll]
+            Lij[k][ll][0] = X_cat[i, k]
+            Lij[k][ll][1] = X_cat[j, k]
     return Lij
 
 
@@ -168,10 +167,10 @@ def _cross_levels_mat_y(n_var, n, X_cat, ij, y, cat_features):
     Lij = np.zeros((n_var, n, 2))
     y_cat = y[:, cat_features]
     for k in prange(n_var):
-        for l in prange(n):
-            i, j = ij[l]
-            Lij[k][l][0] = X_cat[i, k]
-            Lij[k][l][1] = y_cat[j, k]
+        for ll in prange(n):
+            i, j = ij[ll]
+            Lij[k][ll][0] = X_cat[i, k]
+            Lij[k][ll][1] = y_cat[j, k]
     return Lij
 
 
@@ -197,12 +196,12 @@ def cross_levels_homo_space(X, ij, y=None):
     dim = np.shape(X)[1]
     n, _ = ij.shape
     dx = np.zeros((n, dim))
-    for l in range(n):
-        i, j = ij[l]
+    for ll in range(n):
+        i, j = ij[ll]
         if y is None:
-            dx[l] = X[i] * X[j]
+            dx[ll] = X[i] * X[j]
         else:
-            dx[l] = X[i] * y[j]
+            dx[ll] = X[i] * y[j]
 
     return dx
 
@@ -268,7 +267,7 @@ def gower_componentwise_distances(
     else:
         Y = y
         if y_is_acting is None:
-            raise ValueError(f"Expected y_is_acting because y is given")
+            raise ValueError("Expected y_is_acting because y is given")
 
     if not isinstance(X, np.ndarray):
         if not np.array_equal(X.columns, Y.columns):
@@ -278,7 +277,7 @@ def gower_componentwise_distances(
             raise TypeError("X and Y must have same y-dim!")
 
     if x_is_acting.shape != X.shape or y_is_acting.shape != Y.shape:
-        raise ValueError(f"is_acting matrices must have same shape as X!")
+        raise ValueError("is_acting matrices must have same shape as X!")
 
     x_n_rows, x_n_cols = X.shape
     y_n_rows, y_n_cols = Y.shape
@@ -290,26 +289,17 @@ def gower_componentwise_distances(
     Z = np.concatenate((X, Y))
     z_is_acting = np.concatenate((x_is_acting, y_is_acting))
     Z_cat = Z[:, cat_features]
-    z_cat_is_acting = z_is_acting[:, cat_features]
-    cat_is_decreed = is_decreed[cat_features]
 
     x_index = range(0, x_n_rows)
     y_index = range(x_n_rows, x_n_rows + y_n_rows)
     X_cat = Z_cat[x_index,]
     Y_cat = Z_cat[y_index,]
-    x_cat_is_acting = z_cat_is_acting[x_index,]
-    y_cat_is_acting = z_cat_is_acting[y_index,]
-
-    # To support categorical decreed variables, some extra math wizardry is needed
-    if np.any(cat_is_decreed) or np.any(~x_cat_is_acting) or np.any(~y_cat_is_acting):
-        raise ValueError(
-            "Decreed (conditionally-active) categorical variables are not supported yet!"
-        )
 
     # This is to normalize the numeric values between 0 and 1.
     Z_num = Z[:, ~cat_features]
     z_num_is_acting = z_is_acting[:, ~cat_features]
     num_is_decreed = is_decreed[~cat_features]
+
     num_bounds = design_space.get_num_bounds()[~cat_features, :]
     if num_bounds.shape[0] > 0:
         Z_offset = num_bounds[:, 0]
@@ -321,6 +311,8 @@ def gower_componentwise_distances(
     x_num_is_acting = z_num_is_acting[x_index,]
     y_num_is_acting = z_num_is_acting[y_index,]
 
+    # x_cat_is_acting : activeness vector delta
+    # X_cat( not(x_cat_is_acting)) = 0 ###IMPUTED TO FIRST VALUE IN LIST (index 0)
     D_cat = compute_D_cat(X_cat, Y_cat, y)
     D_num, ij = compute_D_num(
         X_num,
@@ -516,515 +508,6 @@ def compute_X_cross(X, n_levels):
                 k += 1
 
     return Zeta
-
-
-def abs_exp(theta, d, grad_ind=None, hess_ind=None, derivative_params=None):
-    """
-    Absolute exponential autocorrelation model.
-    (Ornstein-Uhlenbeck stochastic process)::
-
-    Parameters
-    ----------
-
-    theta : list[small_d * n_comp]
-        Hyperparameters of the correlation model
-    d: np.ndarray[n_obs * (n_obs - 1) / 2, n_comp]
-        d_i otherwise
-    grad_ind : int, optional
-        Indice for which component the gradient dr/dtheta must be computed. The default is None.
-    hess_ind : int, optional
-        Indice for which component the hessian  d²r/d²(theta) must be computed. The default is None.
-    derivative_paramas : dict, optional
-        List of arguments mandatory to compute the gradient dr/dx. The default is None.
-
-    Raises
-    ------
-    Exception
-        Assure that theta is of the good length
-
-    Returns
-    -------
-    r: np.ndarray[n_obs * (n_obs - 1) / 2,1]
-         An array containing the values of the autocorrelation model.
-    """
-
-    return pow_exp(
-        theta,
-        d,
-        grad_ind=grad_ind,
-        hess_ind=hess_ind,
-        derivative_params=derivative_params,
-    )
-
-
-def squar_exp(theta, d, grad_ind=None, hess_ind=None, derivative_params=None):
-    """
-    Squared exponential autocorrelation model.
-
-    Parameters
-    ----------
-
-    theta : list[small_d * n_comp]
-        Hyperparameters of the correlation model
-    d: np.ndarray[n_obs * (n_obs - 1) / 2, n_comp]
-        d_i otherwise
-    grad_ind : int, optional
-        Indice for which component the gradient dr/dtheta must be computed. The default is None.
-    hess_ind : int, optional
-        Indice for which component the hessian  d²r/d²(theta) must be computed. The default is None.
-    derivative_paramas : dict, optional
-        List of arguments mandatory to compute the gradient dr/dx. The default is None.
-
-    Raises
-    ------
-    Exception
-        Assure that theta is of the good length
-
-    Returns
-    -------
-    r: np.ndarray[n_obs * (n_obs - 1) / 2,1]
-         An array containing the values of the autocorrelation model.
-    """
-
-    return pow_exp(
-        theta,
-        d,
-        grad_ind=grad_ind,
-        hess_ind=hess_ind,
-        derivative_params=derivative_params,
-    )
-
-
-def pow_exp(theta, d, grad_ind=None, hess_ind=None, derivative_params=None):
-    """
-    Generative exponential autocorrelation model.
-
-    Parameters
-    ----------
-
-    theta : list[small_d * n_comp]
-        Hyperparameters of the correlation model
-    d: np.ndarray[n_obs * (n_obs - 1) / 2, n_comp]
-        d_i otherwise
-    grad_ind : int, optional
-        Indice for which component the gradient dr/dtheta must be computed. The default is None.
-    hess_ind : int, optional
-        Indice for which component the hessian  d²r/d²(theta) must be computed. The default is None.
-    derivative_paramas : dict, optional
-        List of arguments mandatory to compute the gradient dr/dx. The default is None.
-
-    Raises
-    ------
-    Exception
-        Assure that theta is of the good length
-
-    Returns
-    -------
-    r: np.ndarray[n_obs * (n_obs - 1) / 2,1]
-         An array containing the values of the autocorrelation model.
-    """
-
-    r = np.zeros((d.shape[0], 1))
-    n_components = d.shape[1]
-
-    # Construct/split the correlation matrix
-    i, nb_limit = 0, int(1e4)
-    while i * nb_limit <= d.shape[0]:
-        r[i * nb_limit : (i + 1) * nb_limit, 0] = np.exp(
-            -np.sum(
-                theta.reshape(1, n_components)
-                * d[i * nb_limit : (i + 1) * nb_limit, :],
-                axis=1,
-            )
-        )
-        i += 1
-
-    i = 0
-    if grad_ind is not None:
-        while i * nb_limit <= d.shape[0]:
-            r[i * nb_limit : (i + 1) * nb_limit, 0] = (
-                -d[i * nb_limit : (i + 1) * nb_limit, grad_ind]
-                * r[i * nb_limit : (i + 1) * nb_limit, 0]
-            )
-            i += 1
-
-    i = 0
-    if hess_ind is not None:
-        while i * nb_limit <= d.shape[0]:
-            r[i * nb_limit : (i + 1) * nb_limit, 0] = (
-                -d[i * nb_limit : (i + 1) * nb_limit, hess_ind]
-                * r[i * nb_limit : (i + 1) * nb_limit, 0]
-            )
-            i += 1
-
-    if derivative_params is not None:
-        dd = derivative_params["dd"]
-        r = r.T
-        dr = -np.einsum("i,ij->ij", r[0], dd)
-        return r.T, dr
-
-    return r
-
-
-def matern52(theta, d, grad_ind=None, hess_ind=None, derivative_params=None):
-    """
-    Matern 5/2 correlation model.
-
-     Parameters
-    ----------
-    theta : list[small_d * n_comp]
-        Hyperparameters of the correlation model
-    d: np.ndarray[n_obs * (n_obs - 1) / 2, n_comp]
-        d_i otherwise
-    grad_ind : int, optional
-        Indice for which component the gradient dr/dtheta must be computed. The default is None.
-    hess_ind : int, optional
-        Indice for which component the hessian  d²r/d²(theta) must be computed. The default is None.
-    derivative_params : dict, optional
-        List of arguments mandatory to compute the gradient dr/dx. The default is None.
-
-    Raises
-    ------
-    Exception
-        Assure that theta is of the good length
-
-    Returns
-    -------
-    r: np.ndarray[n_obs * (n_obs - 1) / 2,1]
-        An array containing the values of the autocorrelation model.
-    """
-
-    r = np.zeros((d.shape[0], 1))
-    n_components = d.shape[1]
-
-    # Construct/split the correlation matrix
-    i, nb_limit = 0, int(1e4)
-
-    while i * nb_limit <= d.shape[0]:
-        ll = theta.reshape(1, n_components) * d[i * nb_limit : (i + 1) * nb_limit, :]
-        r[i * nb_limit : (i + 1) * nb_limit, 0] = (
-            1.0 + np.sqrt(5.0) * ll + 5.0 / 3.0 * ll**2.0
-        ).prod(axis=1) * np.exp(-np.sqrt(5.0) * (ll.sum(axis=1)))
-        i += 1
-    i = 0
-
-    M52 = r.copy()
-
-    if grad_ind is not None:
-        theta_r = theta.reshape(1, n_components)
-        while i * nb_limit <= d.shape[0]:
-            fact_1 = (
-                np.sqrt(5) * d[i * nb_limit : (i + 1) * nb_limit, grad_ind]
-                + 10.0
-                / 3.0
-                * theta_r[0, grad_ind]
-                * d[i * nb_limit : (i + 1) * nb_limit, grad_ind] ** 2.0
-            )
-            fact_2 = (
-                1.0
-                + np.sqrt(5)
-                * theta_r[0, grad_ind]
-                * d[i * nb_limit : (i + 1) * nb_limit, grad_ind]
-                + 5.0
-                / 3.0
-                * (theta_r[0, grad_ind] ** 2)
-                * (d[i * nb_limit : (i + 1) * nb_limit, grad_ind] ** 2)
-            )
-            fact_3 = np.sqrt(5) * d[i * nb_limit : (i + 1) * nb_limit, grad_ind]
-
-            r[i * nb_limit : (i + 1) * nb_limit, 0] = (fact_1 / fact_2 - fact_3) * r[
-                i * nb_limit : (i + 1) * nb_limit, 0
-            ]
-            i += 1
-    i = 0
-
-    if hess_ind is not None:
-        while i * nb_limit <= d.shape[0]:
-            fact_1 = (
-                np.sqrt(5) * d[i * nb_limit : (i + 1) * nb_limit, hess_ind]
-                + 10.0
-                / 3.0
-                * theta_r[0, hess_ind]
-                * d[i * nb_limit : (i + 1) * nb_limit, hess_ind] ** 2.0
-            )
-            fact_2 = (
-                1.0
-                + np.sqrt(5)
-                * theta_r[0, hess_ind]
-                * d[i * nb_limit : (i + 1) * nb_limit, hess_ind]
-                + 5.0
-                / 3.0
-                * (theta_r[0, hess_ind] ** 2)
-                * (d[i * nb_limit : (i + 1) * nb_limit, hess_ind] ** 2)
-            )
-            fact_3 = np.sqrt(5) * d[i * nb_limit : (i + 1) * nb_limit, hess_ind]
-
-            r[i * nb_limit : (i + 1) * nb_limit, 0] = (fact_1 / fact_2 - fact_3) * r[
-                i * nb_limit : (i + 1) * nb_limit, 0
-            ]
-
-            if hess_ind == grad_ind:
-                fact_4 = (
-                    10.0
-                    / 3.0
-                    * d[i * nb_limit : (i + 1) * nb_limit, hess_ind] ** 2.0
-                    * fact_2
-                )
-                r[i * nb_limit : (i + 1) * nb_limit, 0] = (
-                    (fact_4 - fact_1**2) / (fact_2) ** 2
-                ) * M52[i * nb_limit : (i + 1) * nb_limit, 0] + r[
-                    i * nb_limit : (i + 1) * nb_limit, 0
-                ]
-
-            i += 1
-    if derivative_params is not None:
-        dx = derivative_params["dx"]
-
-        abs_ = abs(dx)
-        sqr = np.square(dx)
-        abs_0 = np.dot(abs_, theta)
-
-        dr = np.zeros(dx.shape)
-
-        A = np.zeros((dx.shape[0], 1))
-        for i in range(len(abs_0)):
-            A[i][0] = np.exp(-np.sqrt(5) * abs_0[i])
-
-        der = np.ones(dx.shape)
-        for i in range(len(der)):
-            for j in range(n_components):
-                if dx[i][j] < 0:
-                    der[i][j] = -1
-
-        dB = np.zeros((dx.shape[0], n_components))
-        for j in range(dx.shape[0]):
-            for k in range(n_components):
-                coef = 1
-                for l in range(n_components):
-                    if l != k:
-                        coef = coef * (
-                            1
-                            + np.sqrt(5) * abs_[j][l] * theta[l]
-                            + (5.0 / 3) * sqr[j][l] * theta[l] ** 2
-                        )
-                dB[j][k] = (
-                    np.sqrt(5) * theta[k] * der[j][k]
-                    + 2 * (5.0 / 3) * der[j][k] * abs_[j][k] * theta[k] ** 2
-                ) * coef
-
-        for j in range(dx.shape[0]):
-            for k in range(n_components):
-                dr[j][k] = (
-                    -np.sqrt(5) * theta[k] * der[j][k] * r[j] + A[j][0] * dB[j][k]
-                )
-
-        return r, dr
-
-    return r
-
-
-def matern32(theta, d, grad_ind=None, hess_ind=None, derivative_params=None):
-    """
-    Matern 3/2 correlation model.
-
-     Parameters
-    ----------
-    theta : list[small_d * n_comp]
-        Hyperparameters of the correlation model
-    d: np.ndarray[n_obs * (n_obs - 1) / 2, n_comp]
-        d_i otherwise
-    grad_ind : int, optional
-        Indice for which component the gradient dr/dtheta must be computed. The default is None.
-    hess_ind : int, optional
-        Indice for which component the hessian  d²r/d²(theta) must be computed. The default is None.
-    derivative_paramas : dict, optional
-        List of arguments mandatory to compute the gradient dr/dx. The default is None.
-
-    Raises
-    ------
-    Exception
-        Assure that theta is of the good length
-
-    Returns
-    -------
-    r: np.ndarray[n_obs * (n_obs - 1) / 2,1]
-        An array containing the values of the autocorrelation model.
-    """
-
-    r = np.zeros((d.shape[0], 1))
-    n_components = d.shape[1]
-
-    # Construct/split the correlation matrix
-    i, nb_limit = 0, int(1e4)
-
-    theta_r = theta.reshape(1, n_components)
-
-    while i * nb_limit <= d.shape[0]:
-        ll = theta_r * d[i * nb_limit : (i + 1) * nb_limit, :]
-        r[i * nb_limit : (i + 1) * nb_limit, 0] = (1.0 + np.sqrt(3.0) * ll).prod(
-            axis=1
-        ) * np.exp(-np.sqrt(3.0) * (ll.sum(axis=1)))
-        i += 1
-    i = 0
-
-    M32 = r.copy()
-
-    if grad_ind is not None:
-        while i * nb_limit <= d.shape[0]:
-            fact_1 = (
-                1.0
-                / (
-                    1.0
-                    + np.sqrt(3.0)
-                    * theta_r[0, grad_ind]
-                    * d[i * nb_limit : (i + 1) * nb_limit, grad_ind]
-                )
-                - 1.0
-            )
-            r[i * nb_limit : (i + 1) * nb_limit, 0] = (
-                fact_1
-                * r[i * nb_limit : (i + 1) * nb_limit, 0]
-                * np.sqrt(3.0)
-                * d[i * nb_limit : (i + 1) * nb_limit, grad_ind]
-            )
-
-            i += 1
-        i = 0
-
-    if hess_ind is not None:
-        while i * nb_limit <= d.shape[0]:
-            fact_2 = (
-                1.0
-                / (
-                    1.0
-                    + np.sqrt(3.0)
-                    * theta_r[0, hess_ind]
-                    * d[i * nb_limit : (i + 1) * nb_limit, hess_ind]
-                )
-                - 1.0
-            )
-            r[i * nb_limit : (i + 1) * nb_limit, 0] = (
-                r[i * nb_limit : (i + 1) * nb_limit, 0]
-                * fact_2
-                * np.sqrt(3.0)
-                * d[i * nb_limit : (i + 1) * nb_limit, hess_ind]
-            )
-            if grad_ind == hess_ind:
-                fact_3 = (
-                    3.0 * d[i * nb_limit : (i + 1) * nb_limit, hess_ind] ** 2.0
-                ) / (
-                    1.0
-                    + np.sqrt(3.0)
-                    * theta_r[0, hess_ind]
-                    * d[i * nb_limit : (i + 1) * nb_limit, hess_ind]
-                ) ** 2.0
-                r[i * nb_limit : (i + 1) * nb_limit, 0] = (
-                    r[i * nb_limit : (i + 1) * nb_limit, 0]
-                    - fact_3 * M32[i * nb_limit : (i + 1) * nb_limit, 0]
-                )
-            i += 1
-    if derivative_params is not None:
-        dx = derivative_params["dx"]
-
-        abs_ = abs(dx)
-        abs_0 = np.dot(abs_, theta)
-        dr = np.zeros(dx.shape)
-
-        A = np.zeros((dx.shape[0], 1))
-        for i in range(len(abs_0)):
-            A[i][0] = np.exp(-np.sqrt(3) * abs_0[i])
-
-        der = np.ones(dx.shape)
-        for i in range(len(der)):
-            for j in range(n_components):
-                if dx[i][j] < 0:
-                    der[i][j] = -1
-
-        dB = np.zeros((dx.shape[0], n_components))
-        for j in range(dx.shape[0]):
-            for k in range(n_components):
-                coef = 1
-                for l in range(n_components):
-                    if l != k:
-                        coef = coef * (1 + np.sqrt(3) * abs_[j][l] * theta[l])
-                dB[j][k] = np.sqrt(3) * theta[k] * der[j][k] * coef
-
-        for j in range(dx.shape[0]):
-            for k in range(n_components):
-                dr[j][k] = (
-                    -np.sqrt(3) * theta[k] * der[j][k] * r[j] + A[j][0] * dB[j][k]
-                )
-        return r, dr
-
-    return r
-
-
-def act_exp(theta, d, grad_ind=None, hess_ind=None, d_x=None, derivative_params=None):
-    """
-    Active learning exponential correlation model
-
-    Parameters
-    ----------
-    theta : list[small_d * n_comp]
-        Hyperparameters of the correlation model
-    d: np.ndarray[n_obs * (n_obs - 1) / 2, n_comp]
-        d_i otherwise
-    grad_ind : int, optional
-        Indice for which component the gradient dr/dtheta must be computed. The default is None.
-    hess_ind : int, optional
-        Indice for which component the hessian  d²r/d²(theta) must be computed. The default is None.
-    derivative_paramas : dict, optional
-        List of arguments mandatory to compute the gradient dr/dx. The default is None.
-
-    Raises
-    ------
-    Exception
-        Assure that theta is of the good length
-
-    Returns
-    -------
-    r: np.ndarray[n_obs * (n_obs - 1) / 2,1]
-        An array containing the values of the autocorrelation model.
-    """
-
-    r = np.zeros((d.shape[0], 1))
-    n_components = d.shape[1]
-
-    if len(theta) % n_components != 0:
-        raise Exception("Length of theta must be a multiple of n_components")
-
-    n_small_components = len(theta) // n_components
-
-    A = np.reshape(theta, (n_small_components, n_components)).T
-
-    d_A = d.dot(A)
-
-    # Necessary when working in embeddings space
-    if d_x is not None:
-        d = d_x
-        n_components = d.shape[1]
-
-    r[:, 0] = np.exp(-(1 / 2) * np.sum(d_A**2.0, axis=1))
-
-    if grad_ind is not None:
-        d_grad_ind = grad_ind % n_components
-        d_A_grad_ind = grad_ind // n_components
-
-        if hess_ind is None:
-            r[:, 0] = -d[:, d_grad_ind] * d_A[:, d_A_grad_ind] * r[:, 0]
-
-        elif hess_ind is not None:
-            d_hess_ind = hess_ind % n_components
-            d_A_hess_ind = hess_ind // n_components
-            fact = -d_A[:, d_A_grad_ind] * d_A[:, d_A_hess_ind]
-            if d_A_hess_ind == d_A_grad_ind:
-                fact = 1 + fact
-            r[:, 0] = -d[:, d_grad_ind] * d[:, d_hess_ind] * fact * r[:, 0]
-
-    if derivative_params is not None:
-        raise ValueError("Jacobians are not available for this correlation kernel")
-
-    return r
 
 
 def ge_compute_pls(X, y, n_comp, pts, delta_x, xlimits, extra_points):
@@ -1300,7 +783,7 @@ def componentwise_distance_PLS(
 
     D_corr = np.zeros((D.shape[0], n_comp))
     i, nb_limit = 0, int(limit)
-    if return_derivative == False:
+    if not return_derivative:
         while True:
             if i * nb_limit > D_corr.shape[0]:
                 return D_corr
@@ -1332,8 +815,8 @@ def componentwise_distance_PLS(
             D_corr = np.zeros(np.shape(D))
             for i, j in np.ndindex(D.shape):
                 coef = 0
-                for l in range(n_comp):
-                    coef = coef + theta[l] * coeff_pls[j][l] ** 2
+                for ll in range(n_comp):
+                    coef = coef + theta[ll] * coeff_pls[j][ll] ** 2
                 coef = 2 * coef
                 D_corr[i][j] = coef * D[i][j]
             return D_corr
@@ -1343,8 +826,8 @@ def componentwise_distance_PLS(
             der = np.ones(np.shape(D))
             for i, j in np.ndindex(D.shape):
                 coef = 0
-                for l in range(n_comp):
-                    coef = coef + theta[l] * np.abs(coeff_pls[j][l]) ** power
+                for ll in range(n_comp):
+                    coef = coef + theta[ll] * np.abs(coeff_pls[j][ll]) ** power
                 coef = power * coef
                 D_corr[i][j] = coef * np.abs(D[i][j]) ** (power - 1) * der[i][j]
             return D_corr
@@ -1357,8 +840,8 @@ def componentwise_distance_PLS(
                 if D[i][j] < 0:
                     der[i][j] = -1
                 coef = 0
-                for l in range(n_comp):
-                    coef = coef + theta[l] * np.abs(coeff_pls[j][l])
+                for ll in range(n_comp):
+                    coef = coef + theta[ll] * np.abs(coeff_pls[j][ll])
                 D_corr[i][j] = coef * der[i][j]
 
             return D_corr
@@ -1456,16 +939,16 @@ def quadratic(x):
 def matrix_data_corr_levels_cat_matrix(
     i, n_levels, theta_cat, theta_bounds, is_ehh: bool
 ):
-    Theta_mat = np.zeros((n_levels[i], n_levels[i]))
+    Theta_mat = np.zeros((n_levels[i], n_levels[i]), dtype=np.float64)
     L = np.zeros((n_levels[i], n_levels[i]))
     v = 0
     for j in range(n_levels[i]):
         for k in range(n_levels[i] - j):
             if j == k + j:
-                Theta_mat[j, k + j] = 1
+                Theta_mat[j, k + j] = 1.0
             else:
-                Theta_mat[j, k + j] = theta_cat[v]
-                Theta_mat[k + j, j] = theta_cat[v]
+                Theta_mat[j, k + j] = theta_cat[v].item()
+                Theta_mat[k + j, j] = theta_cat[v].item()
                 v = v + 1
 
     for j in range(n_levels[i]):
@@ -1476,16 +959,16 @@ def matrix_data_corr_levels_cat_matrix(
 
                 else:
                     L[j, k + j] = 1
-                    for l in range(j):
-                        L[j, k + j] = L[j, k + j] * np.sin(Theta_mat[j, l])
+                    for ll in range(j):
+                        L[j, k + j] = L[j, k + j] * np.sin(Theta_mat[j, ll])
 
             else:
                 if j == 0:
                     L[k + j, j] = np.cos(Theta_mat[k, 0])
                 else:
                     L[k + j, j] = np.cos(Theta_mat[k + j, j])
-                    for l in range(j):
-                        L[k + j, j] = L[k + j, j] * np.sin(Theta_mat[k + j, l])
+                    for ll in range(j):
+                        L[k + j, j] = L[k + j, j] * np.sin(Theta_mat[k + j, ll])
 
     T = np.dot(L, L.T)
 
@@ -1525,9 +1008,9 @@ def matrix_data_corr_levels_cat_mod_comps(
                 Theta_i_red = np.zeros(int((n_levels[i] - 1) * n_levels[i] / 2))
                 indmatvec = 0
                 for j in range(n_levels[i]):
-                    for l in range(n_levels[i]):
-                        if l > j:
-                            Theta_i_red[indmatvec] = T[j, l]
+                    for ll in range(n_levels[i]):
+                        if ll > j:
+                            Theta_i_red[indmatvec] = T[j, ll]
                             indmatvec += 1
                 kval_cat = 0
                 for indijk in range(len(Theta_i_red)):

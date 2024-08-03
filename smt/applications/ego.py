@@ -5,23 +5,23 @@ This package is distributed under New BSD license.
 
 """
 
-import numpy as np
-
 from types import FunctionType
 
-from scipy.stats import norm
+import numpy as np
 from scipy.optimize import minimize
+from scipy.stats import norm
 
-from smt.surrogate_models import KPLS, KRG, KPLSK, MGP, GEKPLS
 from smt.applications.application import SurrogateBasedApplication
-from smt.applications.mixed_integer import MixedIntegerContext
+from smt.applications.mixed_integer import (
+    MixedIntegerContext,
+    MixedIntegerSamplingMethod,
+)
+from smt.sampling_methods import LHS
+from smt.surrogate_models import GEKPLS, GPX, KPLS, KPLSK, KRG, MGP
 from smt.utils.design_space import (
     BaseDesignSpace,
     DesignSpace,
-    FloatVariable,
-    CategoricalVariable,
 )
-from smt.sampling_methods import LHS
 
 
 class Evaluator(object):
@@ -109,7 +109,7 @@ class EGO(SurrogateBasedApplication):
         declare(
             "surrogate",
             KRG(print_global=False),
-            types=(KRG, KPLS, KPLSK, GEKPLS, MGP),
+            types=(KRG, KPLS, KPLSK, GEKPLS, MGP, GPX),
             desc="SMT kriging-based surrogate model used internaly",
         )
         self.options.declare(
@@ -190,11 +190,24 @@ class EGO(SurrogateBasedApplication):
         f_min = y_data[np.argmin(y_data[:, 0])]
         pred = self.gpr.predict_values(points)
         sig = np.sqrt(self.gpr.predict_variances(points))
-        args0 = (f_min - pred) / sig
-        args1 = (f_min - pred) * norm.cdf(args0)
-        args2 = sig * norm.pdf(args0)
-        if sig.size == 1 and sig == 0.0:  # can be use only if one point is computed
+
+        # initialization good format (array or scalar)
+        args0 = (f_min - pred) * 0.0
+        args1 = (f_min - pred) * 0.0
+
+        if sig.size == 1 and np.abs(sig) > 1e-12:
+            args0 = (f_min - pred) / sig
+            args1 = (f_min - pred) * norm.cdf(args0)
+        elif sig.size > 1:
+            for i, sigma in enumerate(list(sig.T[0])):
+                if np.abs(sigma) > 1e-12:
+                    args0[i][0] = (f_min[0] - pred[i][0]) / sigma
+                    args1[i][0] = (f_min[0] - pred[i][0]) * norm.cdf(args0[i][0])
+        if (
+            sig.size == 1 and np.abs(sig) < 1e-12
+        ):  # can be use only if one point is computed
             return 0.0
+        args2 = sig * norm.pdf(args0)
         ei = args1 + args2
         # penalize the points already evaluated with tunneling
         if enable_tunneling:
@@ -271,10 +284,14 @@ class EGO(SurrogateBasedApplication):
 
         else:
             self.mixint = None
-            self._sampling = lambda n: self.design_space.sample_valid_x(
-                n,
+            sampling = MixedIntegerSamplingMethod(
+                LHS,
+                self.design_space,
+                criterion="ese",
                 random_state=self.options["random_state"],
-            )[0]
+            )
+            self._sampling = lambda n: sampling(n)
+
             self.categorical_kernel = None
 
         # Build DOE
@@ -335,10 +352,10 @@ class EGO(SurrogateBasedApplication):
             cons = []
             for j in range(len(bounds)):
                 lower, upper = bounds[j]
-                l = {"type": "ineq", "fun": lambda x, lb=lower, i=j: x[i] - lb}
-                u = {"type": "ineq", "fun": lambda x, ub=upper, i=j: ub - x[i]}
-                cons.append(l)
-                cons.append(u)
+                lo = {"type": "ineq", "fun": lambda x, lb=lower, i=j: x[i] - lb}
+                up = {"type": "ineq", "fun": lambda x, ub=upper, i=j: ub - x[i]}
+                cons.append(lo)
+                cons.append(up)
             bounds = None
             options = {"maxiter": 300}
         else:

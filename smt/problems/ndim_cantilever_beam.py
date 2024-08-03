@@ -5,12 +5,13 @@ This package is distributed under New BSD license.
 
 N-dimensional cantilever beam problem.
 """
+
 import numpy as np
 
-from smt.utils.options_dictionary import OptionsDictionary
+from smt.problems.cantilever_beam import CantileverBeam
 from smt.problems.problem import Problem
 from smt.problems.reduced_problem import ReducedProblem
-from smt.problems.cantilever_beam import CantileverBeam
+from smt.utils.options_dictionary import OptionsDictionary
 
 
 class NdimCantileverBeam(Problem):

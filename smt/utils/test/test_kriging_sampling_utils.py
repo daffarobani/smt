@@ -3,26 +3,29 @@ Author: Paul Saves
 """
 
 import unittest
+
 import numpy as np
+
 from smt.surrogate_models import KRG
 from smt.utils.krg_sampling import (
     covariance_matrix,
-    sample_trajectory,
+    eig_grid,
     gauss_legendre_grid,
     rectangular_grid,
-    simpson_grid,
-    eig_grid,
     sample_eigen,
+    sample_trajectory,
+    simpson_grid,
 )
 
 
 class Test(unittest.TestCase):
-    def test_cov_matrix(self):
-        f = lambda x: x**2 * np.sin(x)
+    @staticmethod
+    def f(x):
+        return x**2 * np.sin(x)
 
-        x_min, x_max = -10, 10
+    def test_cov_matrix(self):
         X_doe = np.array([-8.5, -4.0, -3.0, -1.0, 4.0, 7.5])
-        Y_doe = f(X_doe)
+        Y_doe = Test.f(X_doe)
 
         gp = KRG(theta0=[1e-2])
         gp.set_training_values(X_doe, Y_doe)
@@ -33,11 +36,9 @@ class Test(unittest.TestCase):
         self.assertAlmostEqual(cov_matrix.shape, (3, 3))
 
     def test_matrix_decomposition(self):
-        f = lambda x: x**2 * np.sin(x)
-
         x_min, x_max = -10, 10
         X_doe = np.array([-8.5, -4.0, -3.0, -1.0, 4.0, 7.5])
-        Y_doe = f(X_doe)
+        Y_doe = Test.f(X_doe)
 
         gp = KRG(theta0=[1e-2])
         gp.set_training_values(X_doe, Y_doe)
@@ -54,11 +55,9 @@ class Test(unittest.TestCase):
         self.assertEqual(traj_eig.shape, (n_plot, n_traj))
 
     def test_nystrom(self):
-        f = lambda x: x**2 * np.sin(x)
-
         x_min, x_max = -10, 10
         X_doe = np.array([-8.5, -4.0, -3.0, -1.0, 4.0, 7.5])
-        Y_doe = f(X_doe)
+        Y_doe = Test.f(X_doe)
         bounds = np.array([[x_min], [x_max]])
 
         gp = KRG(theta0=[1e-2])

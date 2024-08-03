@@ -10,8 +10,8 @@ Adapted on March 2020 by Nathalie Bartoli to the new SMT version
 Adapted on January 2021 by Andres Lopez-Lopera to the new SMT version
 """
 
-from smt.utils.kriging import componentwise_distance
 from smt.applications import MFKPLS
+from smt.utils.kriging import componentwise_distance
 
 
 class MFKPLSK(MFKPLS):
@@ -25,6 +25,13 @@ class MFKPLSK(MFKPLS):
             values=("squar_exp"),
             desc="Correlation function type",
             types=(str),
+        )
+        declare(
+            "hyper_opt",
+            "Cobyla",
+            values=("Cobyla"),
+            desc="Optimiser for hyperparameters optimisation",
+            types=str,
         )
         self.name = "MFKPLSK"
 

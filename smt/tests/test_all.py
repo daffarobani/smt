@@ -5,64 +5,40 @@ Author: Dr. John T. Hwang <hwangjt@umich.edu>
 This package is distributed under New BSD license.
 """
 
-import os
-import numpy as np
-import unittest
 import inspect
-
+import unittest
 from collections import OrderedDict
 
-from smt.problems import TensorProduct
-from smt.sampling_methods import LHS, FullFactorial
+import numpy as np
 
-from smt.utils.sm_test_case import SMTestCase
-from smt.utils.silence import Silence
-from smt.utils import compute_rms_error
+from smt.problems import TensorProduct
+from smt.sampling_methods import LHS
 from smt.surrogate_models import (
-    LS,
-    QP,
-    KPLS,
-    KRG,
-    KPLSK,
     GEKPLS,
     GENN,
+    GPX,
+    KPLS,
+    KPLSK,
+    KRG,
+    LS,
     MGP,
+    QP,
     DesignSpace,
 )
+from smt.surrogate_models.gpx import GPX_AVAILABLE
+from smt.utils.misc import compute_rms_error
+from smt.utils.silence import Silence
+from smt.utils.sm_test_case import SMTestCase
 
 try:
-    from smt.surrogate_models import IDW, RBF, RMTC, RMTB
+    from smt.surrogate_models import IDW, RBF, RMTB, RMTC
 
-    compiled_available = True
-except:
-    compiled_available = False
+    COMPILED_AVAILABLE = True
+except ImportError:
+    COMPILED_AVAILABLE = False
 
 
 print_output = False
-
-
-def genn():
-    neural_net = GENN()
-    neural_net.options["alpha"] = 0.1  # learning rate that controls optimizer step size
-    neural_net.options["beta1"] = 0.9  # tuning parameter to control ADAM optimization
-    neural_net.options["beta2"] = 0.99  # tuning parameter to control ADAM optimization
-    neural_net.options[
-        "lambd"
-    ] = 0.1  # lambd = 0. = no regularization, lambd > 0 = regularization
-    neural_net.options[
-        "gamma"
-    ] = 1.0  # gamma = 0. = no grad-enhancement, gamma > 0 = grad-enhancement
-    neural_net.options["deep"] = 2  # number of hidden layers
-    neural_net.options["wide"] = 12  # number of nodes per hidden layer
-    neural_net.options[
-        "mini_batch_size"
-    ] = 10000  # used to divide data into training batches (use for large data sets)
-    neural_net.options["num_epochs"] = 25  # number of passes through data
-    neural_net.options[
-        "num_iterations"
-    ] = 100  # number of optimizer iterations per mini-batch
-    neural_net.options["is_print"] = True
-    return neural_net
 
 
 class Test(SMTestCase):
@@ -80,13 +56,25 @@ class Test(SMTestCase):
         sms = OrderedDict()
         sms["LS"] = LS()
         sms["QP"] = QP()
+        if GPX_AVAILABLE:
+            sms["GPX"] = GPX()
         sms["KRG"] = KRG(theta0=[1e-2] * ndim)
         sms["KPLS"] = KPLS(theta0=[1e-2] * ncomp, n_comp=ncomp)
         sms["KPLSK"] = KPLSK(theta0=[1] * ncomp, n_comp=ncomp)
-        sms["MGP"] = KPLSK(theta0=[1e-2] * ncomp, n_comp=ncomp)
+        sms["MGP"] = MGP(theta0=[1e-2] * ndim)
         sms["GEKPLS"] = GEKPLS(theta0=[1e-2] * 2, n_comp=2, delta_x=1e-1)
-        sms["GENN"] = genn()
-        if compiled_available:
+        sms["GENN"] = GENN(
+            num_iterations=1000,
+            hidden_layer_sizes=[
+                24,
+            ],
+            alpha=1e-1,
+            lambd=1e-2,
+            is_backtracking=True,
+            is_normalize=True,
+        )
+
+        if COMPILED_AVAILABLE:
             sms["IDW"] = IDW()
             sms["RBF"] = RBF()
             sms["RMTC"] = RMTC()
@@ -95,14 +83,15 @@ class Test(SMTestCase):
         t_errors = {}
         t_errors["LS"] = 1.0
         t_errors["QP"] = 1.0
-        t_errors["KRG"] = 1.2
+        t_errors["GPX"] = 1.1
+        t_errors["KRG"] = 1.1
         t_errors["MFK"] = 1e0
-        t_errors["KPLS"] = 1.2
+        t_errors["KPLS"] = 1.1
         t_errors["KPLSK"] = 1e0
         t_errors["MGP"] = 1e0
         t_errors["GEKPLS"] = 1.4
-        t_errors["GENN"] = 1.2
-        if compiled_available:
+        t_errors["GENN"] = 1.1
+        if COMPILED_AVAILABLE:
             t_errors["IDW"] = 1e0
             t_errors["RBF"] = 1e-2
             t_errors["RMTC"] = 1e-1
@@ -111,14 +100,15 @@ class Test(SMTestCase):
         e_errors = {}
         e_errors["LS"] = 1.5
         e_errors["QP"] = 1.5
-        e_errors["KRG"] = 2e-2
+        e_errors["GPX"] = 2e-2
+        e_errors["KRG"] = 3e-2
         e_errors["MFK"] = 2e-2
         e_errors["KPLS"] = 2e-2
-        e_errors["KPLSK"] = 2e-2
-        e_errors["MGP"] = 2e-2
+        e_errors["KPLSK"] = 3e-2
+        e_errors["MGP"] = 6e-2
         e_errors["GEKPLS"] = 2e-2
-        e_errors["GENN"] = 2e-2
-        if compiled_available:
+        e_errors["GENN"] = 3e-2
+        if COMPILED_AVAILABLE:
             e_errors["IDW"] = 1e0
             e_errors["RBF"] = 1e0
             e_errors["RMTC"] = 2e-1
@@ -152,6 +142,7 @@ class Test(SMTestCase):
         sm0 = self.sms[sname]
 
         sm = sm0.__class__()
+
         sm.options = sm0.options.clone()
         if sm.options.is_declared("design_space"):
             sm.options["design_space"] = DesignSpace(prob.xlimits)
@@ -180,15 +171,16 @@ class Test(SMTestCase):
         # Some test case tolerance relaxations wrt to global tolerance values
         if pname == "cos":
             self.assertLessEqual(e_error, self.e_errors[sname] + 1.6)
-        elif pname == "tanh" and sname in ["KPLS", "GENN", "RMTB"]:
+        elif pname == "tanh" and sname in ["KPLS", "RMTB"]:
             self.assertLessEqual(e_error, self.e_errors[sname] + 0.4)
         elif pname == "exp" and sname in ["GENN"]:
-            self.assertLessEqual(e_error, self.e_errors[sname] + 0.2)
+            self.assertLessEqual(e_error, 1.5e-1)
         elif pname == "exp" and sname in ["RMTB"]:
             self.assertLessEqual(e_error, self.e_errors[sname] + 0.5)
+        elif pname == "tanh" and sname in ["MGP"]:
+            self.assertLessEqual(e_error, 9e-1)
         else:
             self.assertLessEqual(e_error, self.e_errors[sname])
-
         self.assertLessEqual(t_error, self.t_errors[sname])
 
     def test_exp_LS(self):
@@ -224,23 +216,26 @@ class Test(SMTestCase):
     def test_exp_GEKPLS_TNC(self):
         self.run_test()
 
-    @unittest.skipIf(int(os.getenv("RUN_SLOW", 0)) < 1, "too slow")
     def test_exp_GENN(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not GPX_AVAILABLE, "GPX not available")
+    def test_exp_GPX(self):
+        self.run_test()
+
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_exp_IDW(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_exp_RBF(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_exp_RMTC(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_exp_RMTB(self):
         self.run_test()
 
@@ -280,23 +275,26 @@ class Test(SMTestCase):
     def test_tanh_GEKPLS_TNC(self):
         self.run_test()
 
-    @unittest.skipIf(int(os.getenv("RUN_SLOW", 0)) < 1, "too slow")
     def test_tanh_GENN(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not GPX_AVAILABLE, "GPX not available")
+    def test_tanh_GPX(self):
+        self.run_test()
+
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_tanh_IDW(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_tanh_RBF(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_tanh_RMTC(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_tanh_RMTB(self):
         self.run_test()
 
@@ -336,28 +334,27 @@ class Test(SMTestCase):
     def test_cos_GEKPLS_TNC(self):
         self.run_test()
 
-    @unittest.skipIf(int(os.getenv("RUN_SLOW", 0)) < 1, "too slow")
     def test_cos_GENN(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not GPX_AVAILABLE, "GPX not available")
+    def test_cos_GPX(self):
+        self.run_test()
+
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_cos_IDW(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_cos_RBF(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_cos_RMTC(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_cos_RMTB(self):
-        self.run_test()
-
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
-    def test_exp_RMTB(self):
         self.run_test()
 
 

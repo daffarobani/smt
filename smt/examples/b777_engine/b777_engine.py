@@ -1,5 +1,6 @@
-import numpy as np
 import os
+
+import numpy as np
 
 
 def get_b777_engine():
@@ -18,8 +19,8 @@ def get_b777_engine():
 
 
 def plot_b777_engine(xt, yt, limits, interp):
-    import numpy as np
     import matplotlib
+    import numpy as np
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -97,7 +98,7 @@ def plot_b777_engine(xt, yt, limits, interp):
 
     # --------------------
 
-    fig, axs = plt.subplots(6, 2, gridspec_kw={"hspace": 0.5}, figsize=(15, 25))
+    fig, axs = plt.subplots(nrow, ncol, gridspec_kw={"hspace": 0.5}, figsize=(15, 25))
 
     axs[0, 0].set_title("M={}".format(val_M[ind_M_1]))
     axs[0, 0].set(xlabel="throttle", ylabel="thrust (x 1e6 N)")

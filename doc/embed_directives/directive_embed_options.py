@@ -15,9 +15,20 @@ class DirectiveEmbedOptions(Directive):
         module_path, class_name, attribute_name = args
 
         exec("from {} import {}".format(module_path, class_name), globals())
-        exec("obj = {}()".format(class_name), globals())
 
-        options = getattr(obj, attribute_name)
+        # sampling methods requires xlimits option
+        exec("import numpy as np", globals())
+        exec(
+            "from smt.sampling_methods.sampling_method import SamplingMethod", globals()
+        )
+        exec(
+            f"params = 'xlimits=np.array([[0, 1]])' if issubclass({class_name}, SamplingMethod) else ''",
+            globals(),
+        )
+
+        exec("obj = {}({})".format(class_name, params), globals())  # noqa: F821
+
+        options = getattr(obj, attribute_name)  # noqa: F821
 
         outputs = []
         for option_name, option_data in options._declared_entries.items():

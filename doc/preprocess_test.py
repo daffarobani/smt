@@ -1,18 +1,15 @@
 """
 Author: Dr. John T. Hwang <hwangjt@umich.edu>
-        
+
 This package is distributed under New BSD license.
 """
 
-import os, sys
-import inspect
-import importlib
 import contextlib
-
-try:
-    from StringIO import StringIO
-except:
-    from io import StringIO
+import importlib
+import inspect
+import os
+import sys
+from io import StringIO
 
 import matplotlib
 

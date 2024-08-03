@@ -4,9 +4,13 @@ Author: Dr. John T. Hwang <hwangjt@umich.edu>
 This package is distributed under New BSD license.
 
 Robot arm problem from:
-Liu, H., Xu, S., & Wang, X. Sampling strategies and metamodeling techniques for engineering design: comparison and application. In ASME Turbo Expo 2016: Turbomachinery Technical Conference and Exposition. American Society of Mechanical Engineers. June, 2016.
+Liu, H., Xu, S., & Wang, X. Sampling strategies and metamodeling techniques for engineering design:
+comparison and application. In ASME Turbo Expo 2016: Turbomachinery Technical Conference and Exposition.
+American Society of Mechanical Engineers. June, 2016.
+
 An, J., and Owen, A. Quasi-Regression. Journal of complexity, 17(4), pp. 588-607, 2001.
 """
+
 import numpy as np
 
 from smt.problems.problem import Problem
@@ -57,6 +61,9 @@ class RobotArm(Problem):
         y = np.zeros((ne, 1), complex)
         d_pos_x = np.zeros(ne, complex)
         d_pos_y = np.zeros(ne, complex)
+
+        # To remove warning: NaN can be ignored
+        np.seterr(invalid="ignore")
         if kx is None:
             y[:, 0] = (pos_x**2 + pos_y**2) ** 0.5
         else:

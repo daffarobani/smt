@@ -8,8 +8,8 @@ Usage
 
 .. code-block:: python
 
-  import numpy as np
   import matplotlib.pyplot as plt
+  import numpy as np
   
   from smt.sampling_methods import Random
   
@@ -30,7 +30,7 @@ Usage
 
   (50, 2)
   
-.. figure:: random_Test_test_random.png
+.. figure:: random_Test_run_random.png
   :scale: 80 %
   :align: center
 

@@ -7,27 +7,25 @@ Created on Mon May 07 14:20:11 2018
 Adapted to new SMT version in march 2020 by Nathalie Bartoli
 """
 
-import matplotlib
+try:
+    import matplotlib
 
-matplotlib.use("Agg")
+    matplotlib.use("Agg")
+    NO_MATPLOTLIB = False
+except ImportError:
+    NO_MATPLOTLIB = True
 
 import unittest
+from copy import deepcopy
+
 import numpy as np
-import unittest
-import inspect
 
-from collections import OrderedDict
-
+from smt.applications.mfkplsk import MFKPLSK
 from smt.problems import Sphere, TensorProduct
 from smt.sampling_methods import LHS, FullFactorial
-
-from smt.utils.sm_test_case import SMTestCase
+from smt.utils.misc import compute_rms_error
 from smt.utils.silence import Silence
-from smt.utils import compute_rms_error
-from smt.surrogate_models import LS, QP, KPLS, KRG, KPLSK, GEKPLS, GENN
-from smt.applications.mfk import MFK, NestedLHS
-from smt.applications.mfkplsk import MFKPLSK
-from copy import deepcopy
+from smt.utils.sm_test_case import SMTestCase
 
 print_output = False
 
@@ -132,25 +130,20 @@ class TestMFKPLSK(SMTestCase):
         with Silence():
             sm.train()
 
-        t_error = compute_rms_error(sm)
-        e_error = compute_rms_error(sm, xe, ye)
+        _t_error = compute_rms_error(sm)
+        _e_error = compute_rms_error(sm, xe, ye)
         e_error0 = compute_rms_error(sm, xe, dye[0], 0)
         e_error1 = compute_rms_error(sm, xe, dye[1], 1)
-
-        if print_output:
-            print(
-                "%8s %6s %18.9e %18.9e %18.9e %18.9e"
-                % (pname[:6], sname, t_error, e_error, e_error0, e_error1)
-            )
 
         self.assert_error(e_error0, 0.0, 1e-1)
         self.assert_error(e_error1, 0.0, 1e-1)
 
     @staticmethod
     def run_mfkplsk_example():
-        import numpy as np
         import matplotlib.pyplot as plt
-        from smt.applications.mfk import MFK, NestedLHS
+        import numpy as np
+
+        from smt.applications.mfk import NestedLHS
         from smt.applications.mfkplsk import MFKPLSK
 
         # low fidelity modelk
@@ -194,8 +187,8 @@ class TestMFKPLSK(SMTestCase):
 
         # query the outputs
         y = sm.predict_values(x)
-        mse = sm.predict_variances(x)
-        derivs = sm.predict_derivatives(x, kx=0)
+        _mse = sm.predict_variances(x)
+        _derivs = sm.predict_derivatives(x, kx=0)
 
         plt.figure()
 
@@ -211,6 +204,12 @@ class TestMFKPLSK(SMTestCase):
         plt.ylabel(r"$y$")
 
         plt.show()
+
+    # run scripts are used in documentation as documentation is not always rebuild
+    # make a test run by pytest to test the run scripts
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
+    def test_run_mfkplsk_example(self):
+        self.run_mfkplsk_example()
 
 
 if __name__ == "__main__":

@@ -7,15 +7,16 @@ This package is distributed under New BSD license.
 TO DO:
 - define outputs['sol'] = self.sol
 """
+
 import numpy as np
 import scipy
+
 from smt.surrogate_models.surrogate_model import SurrogateModel
 from smt.utils.caching import cached_operation
 from smt.utils.misc import standardization
 
 
 class QP(SurrogateModel):
-
     """
     Square polynomial approach
     """
@@ -159,4 +160,5 @@ class QP(SurrogateModel):
         M = self._response_surface(x)
         y_ = np.dot(M, self.coef)
         y = (self.y_mean + self.y_std * y_).ravel()
+        y = y.reshape((x.shape[0], self.ny))
         return y

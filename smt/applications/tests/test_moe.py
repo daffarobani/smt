@@ -4,20 +4,25 @@ Author: Remi Lafage <remi.lafage@onera.fr>
 This package is distributed under New BSD license.
 """
 
-import matplotlib
+try:
+    import matplotlib
 
-matplotlib.use("Agg")
+    matplotlib.use("Agg")
+    NO_MATPLOTLIB = False
+except ImportError:
+    NO_MATPLOTLIB = True
 
 import unittest
-import numpy as np
 from sys import argv
 
+import numpy as np
+
 from smt.applications import MOE, MOESurrogateModel
-from smt.utils.sm_test_case import SMTestCase
 from smt.problems import Branin, LpNorm
-from smt.sampling_methods import FullFactorial, LHS
-from smt.utils.misc import compute_rms_error
+from smt.sampling_methods import LHS, FullFactorial
 from smt.surrogate_models import RMTB, RMTC
+from smt.utils.misc import compute_rms_error
+from smt.utils.sm_test_case import SMTestCase
 
 
 class TestMOE(SMTestCase):
@@ -66,7 +71,6 @@ class TestMOE(SMTestCase):
 
         if TestMOE.plot:
             import matplotlib.pyplot as plt
-            from mpl_toolkits.mplot3d import Axes3D
 
             y = moe.predict_values(xe)
             plt.figure(1)
@@ -123,7 +127,6 @@ class TestMOE(SMTestCase):
 
         if TestMOE.plot:
             import matplotlib.pyplot as plt
-            from mpl_toolkits.mplot3d import Axes3D
 
             y = moe.predict_values(xe)
             plt.figure(1)
@@ -188,7 +191,6 @@ class TestMOE(SMTestCase):
 
         if TestMOE.plot:
             import matplotlib.pyplot as plt
-            from mpl_toolkits.mplot3d import Axes3D
 
             y = moe.predict_values(xe)
             plt.figure(1)
@@ -232,7 +234,6 @@ class TestMOE(SMTestCase):
 
         if TestMOE.plot:
             import matplotlib.pyplot as plt
-            from mpl_toolkits.mplot3d import Axes3D
 
             y = moe.predict_values(xe)
             plt.figure(1)
@@ -277,7 +278,6 @@ class TestMOE(SMTestCase):
 
         if TestMOE.plot:
             import matplotlib.pyplot as plt
-            from mpl_toolkits.mplot3d import Axes3D
 
             y = moe.analyse_results(x=xe, operation="predict_values")
             plt.figure(1)
@@ -327,7 +327,6 @@ class TestMOE(SMTestCase):
 
         nt1 = 11
         nt2 = 15
-        ne = 101
 
         # Training data
         X1 = np.linspace(0.001, 0.3, nt1).reshape(nt1, 1)
@@ -391,10 +390,11 @@ class TestMOE(SMTestCase):
 
     @staticmethod
     def run_moe_example_1d():
+        import matplotlib.pyplot as plt
         import numpy as np
+
         from smt.applications import MOE
         from smt.sampling_methods import FullFactorial
-        import matplotlib.pyplot as plt
 
         nt = 35
 
@@ -446,15 +446,13 @@ class TestMOE(SMTestCase):
 
     @staticmethod
     def run_moe_example_2d():
+        import matplotlib.pyplot as plt
         import numpy as np
+        from matplotlib import colors
+
         from smt.applications import MOE
         from smt.problems import LpNorm
         from smt.sampling_methods import FullFactorial
-
-        import sklearn
-        import matplotlib.pyplot as plt
-        from matplotlib import colors
-        from mpl_toolkits.mplot3d import Axes3D
 
         ndim = 2
         nt = 200
@@ -491,11 +489,6 @@ class TestMOE(SMTestCase):
         colors_ = list(colors.cnames.items())
         GMM = moe.cluster
         weight = GMM.weights_
-        mean = GMM.means_
-        if sklearn.__version__ < "0.20.0":
-            cov = GMM.covars_
-        else:
-            cov = GMM.covariances_
         prob_ = moe._proba_cluster(xt)
         sort = np.apply_along_axis(np.argmax, 1, prob_)
 

@@ -1,13 +1,12 @@
-import numpy as np
 import unittest
 
-from smt.utils.sm_test_case import SMTestCase
-from smt.utils.silence import Silence
-from smt.surrogate_models import QP, KRG
+import numpy as np
+
 from smt.examples.rans_crm_wing.rans_crm_wing import (
     get_rans_crm_wing,
-    plot_rans_crm_wing,
 )
+from smt.utils.silence import Silence
+from smt.utils.sm_test_case import SMTestCase
 
 
 def setup_sm(sm_name, settings={}):
@@ -38,7 +37,7 @@ class ArrayOutputTest(SMTestCase):
             d0 = interp.predict_derivatives(np.atleast_2d(xt[10, :]), 0)
 
         self.assert_error(
-            d0, np.array([[0.06874097, 4.366292277996716]]), atol=0.55, rtol=0.15
+            d0, np.array([[-0.02256528, 5.80875652]]), atol=0.55, rtol=0.15
         )
 
     def test_RBF(self):

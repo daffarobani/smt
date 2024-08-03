@@ -20,11 +20,11 @@ Example of mixed integer Polynomial (QP) surrogate
 
 .. code-block:: python
 
-  import numpy as np
   import matplotlib.pyplot as plt
+  import numpy as np
   
-  from smt.surrogate_models import QP
   from smt.applications.mixed_integer import MixedIntegerSurrogateModel
+  from smt.surrogate_models import QP
   from smt.utils.design_space import DesignSpace, IntegerVariable
   
   xt = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
@@ -61,9 +61,9 @@ Example of mixed integer Polynomial (QP) surrogate
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0000160
+     Predicting - done. Time (sec):  0.0000000
      
-     Prediction time/pt. (sec) :  0.0000002
+     Prediction time/pt. (sec) :  0.0000000
      
   
 .. figure:: Mixed_Hier_surr_TestMixedInteger_run_mixed_integer_qp_example.png
@@ -85,14 +85,16 @@ Example of mixed integer Gower Distance model
 
 .. code-block:: python
 
-  import numpy as np
   import matplotlib.pyplot as plt
+  import numpy as np
   
+  from smt.applications.mixed_integer import (
+      MixedIntegerKrigingModel,
+  )
   from smt.surrogate_models import KRG, MixIntKernelType
-  from smt.applications.mixed_integer import MixedIntegerKrigingModel
   from smt.utils.design_space import (
-      DesignSpace,
       CategoricalVariable,
+      DesignSpace,
       FloatVariable,
   )
   
@@ -120,6 +122,7 @@ Example of mixed integer Gower Distance model
           design_space=design_space,
           categorical_kernel=MixIntKernelType.GOWER,
           theta0=[1e-1],
+          hyper_opt="Cobyla",
           corr="squar_exp",
           n_start=20,
       ),
@@ -221,20 +224,9 @@ Example of mixed integer Gower Distance model
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0028670
+     Predicting - done. Time (sec):  0.0156229
      
-     Prediction time/pt. (sec) :  0.0000287
-     
-  ___________________________________________________________________________
-     
-   Evaluation
-     
-        # eval points. : 100
-     
-     Predicting ...
-     Predicting - done. Time (sec):  0.0028043
-     
-     Prediction time/pt. (sec) :  0.0000280
+     Prediction time/pt. (sec) :  0.0001562
      
   ___________________________________________________________________________
      
@@ -243,12 +235,211 @@ Example of mixed integer Gower Distance model
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0028021
+     Predicting - done. Time (sec):  0.0156212
      
-     Prediction time/pt. (sec) :  0.0000280
+     Prediction time/pt. (sec) :  0.0001562
+     
+  ___________________________________________________________________________
+     
+   Evaluation
+     
+        # eval points. : 100
+     
+     Predicting ...
+     Predicting - done. Time (sec):  0.0159624
+     
+     Prediction time/pt. (sec) :  0.0001596
      
   
 .. figure:: Mixed_Hier_surr_TestMixedInteger_run_mixed_gower_example.png
+  :scale: 80	 %
+  :align: center
+
+Mixed Integer Kriging with Compound Symmetry (CS)
+-------------------------------------------------
+
+Compound Symmetry is similar to Gower Distance but allow to model negative correlations. Details can be found in [2]_ .
+
+Example of mixed integer Compound Symmetry model
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+  import matplotlib.pyplot as plt
+  import numpy as np
+  
+  from smt.applications.mixed_integer import (
+      MixedIntegerKrigingModel,
+  )
+  from smt.surrogate_models import KRG, MixIntKernelType
+  from smt.utils.design_space import (
+      CategoricalVariable,
+      DesignSpace,
+      FloatVariable,
+  )
+  
+  xt1 = np.array([[0, 0.0], [0, 2.0], [0, 4.0]])
+  xt2 = np.array([[1, 0.0], [1, 2.0], [1, 3.0]])
+  xt3 = np.array([[2, 1.0], [2, 2.0], [2, 4.0]])
+  
+  xt = np.concatenate((xt1, xt2, xt3), axis=0)
+  xt[:, 1] = xt[:, 1].astype(np.float64)
+  yt1 = np.array([0.0, 9.0, 16.0])
+  yt2 = np.array([0.0, -4, -13.0])
+  yt3 = np.array([-10, 3, 11.0])
+  yt = np.concatenate((yt1, yt2, yt3), axis=0)
+  
+  design_space = DesignSpace(
+      [
+          CategoricalVariable(["Blue", "Red", "Green"]),
+          FloatVariable(0, 4),
+      ]
+  )
+  
+  # Surrogate
+  sm = MixedIntegerKrigingModel(
+      surrogate=KRG(
+          design_space=design_space,
+          categorical_kernel=MixIntKernelType.COMPOUND_SYMMETRY,
+          theta0=[1e-1],
+          hyper_opt="Cobyla",
+          corr="squar_exp",
+          n_start=20,
+      ),
+  )
+  sm.set_training_values(xt, yt)
+  sm.train()
+  
+  # DOE for validation
+  n = 100
+  x_cat1 = []
+  x_cat2 = []
+  x_cat3 = []
+  
+  for i in range(n):
+      x_cat1.append(0)
+      x_cat2.append(1)
+      x_cat3.append(2)
+  
+  x_cont = np.linspace(0.0, 4.0, n)
+  x1 = np.concatenate(
+      (np.asarray(x_cat1).reshape(-1, 1), x_cont.reshape(-1, 1)), axis=1
+  )
+  x2 = np.concatenate(
+      (np.asarray(x_cat2).reshape(-1, 1), x_cont.reshape(-1, 1)), axis=1
+  )
+  x3 = np.concatenate(
+      (np.asarray(x_cat3).reshape(-1, 1), x_cont.reshape(-1, 1)), axis=1
+  )
+  
+  y1 = sm.predict_values(x1)
+  y2 = sm.predict_values(x2)
+  y3 = sm.predict_values(x3)
+  
+  # estimated variance
+  s2_1 = sm.predict_variances(x1)
+  s2_2 = sm.predict_variances(x2)
+  s2_3 = sm.predict_variances(x3)
+  
+  fig, axs = plt.subplots(3, figsize=(8, 6))
+  
+  axs[0].plot(xt1[:, 1].astype(np.float64), yt1, "o", linestyle="None")
+  axs[0].plot(x_cont, y1, color="Blue")
+  axs[0].fill_between(
+      np.ravel(x_cont),
+      np.ravel(y1 - 3 * np.sqrt(s2_1)),
+      np.ravel(y1 + 3 * np.sqrt(s2_1)),
+      color="lightgrey",
+  )
+  axs[0].set_xlabel("x")
+  axs[0].set_ylabel("y")
+  axs[0].legend(
+      ["Training data", "Prediction", "Confidence Interval 99%"],
+      loc="upper left",
+      bbox_to_anchor=[0, 1],
+  )
+  axs[1].plot(
+      xt2[:, 1].astype(np.float64), yt2, marker="o", color="r", linestyle="None"
+  )
+  axs[1].plot(x_cont, y2, color="Red")
+  axs[1].fill_between(
+      np.ravel(x_cont),
+      np.ravel(y2 - 3 * np.sqrt(s2_2)),
+      np.ravel(y2 + 3 * np.sqrt(s2_2)),
+      color="lightgrey",
+  )
+  axs[1].set_xlabel("x")
+  axs[1].set_ylabel("y")
+  axs[1].legend(
+      ["Training data", "Prediction", "Confidence Interval 99%"],
+      loc="upper left",
+      bbox_to_anchor=[0, 1],
+  )
+  axs[2].plot(
+      xt3[:, 1].astype(np.float64), yt3, marker="o", color="r", linestyle="None"
+  )
+  axs[2].plot(x_cont, y3, color="Green")
+  axs[2].fill_between(
+      np.ravel(x_cont),
+      np.ravel(y3 - 3 * np.sqrt(s2_3)),
+      np.ravel(y3 + 3 * np.sqrt(s2_3)),
+      color="lightgrey",
+  )
+  axs[2].set_xlabel("x")
+  axs[2].set_ylabel("y")
+  axs[2].legend(
+      ["Training data", "Prediction", "Confidence Interval 99%"],
+      loc="upper left",
+      bbox_to_anchor=[0, 1],
+  )
+  plt.tight_layout()
+  plt.show()
+  
+::
+
+  exception :  4-th leading minor of the array is not positive definite
+  [ 3.28121902e+01 -1.19061651e+01 -1.19062304e+01  7.34202209e-04
+   -3.09582545e-04 -2.19341599e-04  3.49847452e-09 -1.67389408e-09
+   -7.15698500e-10]
+  exception :  4-th leading minor of the array is not positive definite
+  [ 9.09297095e+00 -4.69851668e-02 -4.69502417e-02  9.74106925e-04
+   -5.62905232e-06 -4.04511718e-06  2.47447277e-08 -1.26347028e-10
+   -6.20962310e-11]
+  ___________________________________________________________________________
+     
+   Evaluation
+     
+        # eval points. : 100
+     
+     Predicting ...
+     Predicting - done. Time (sec):  0.0156257
+     
+     Prediction time/pt. (sec) :  0.0001563
+     
+  ___________________________________________________________________________
+     
+   Evaluation
+     
+        # eval points. : 100
+     
+     Predicting ...
+     Predicting - done. Time (sec):  0.0098379
+     
+     Prediction time/pt. (sec) :  0.0000984
+     
+  ___________________________________________________________________________
+     
+   Evaluation
+     
+        # eval points. : 100
+     
+     Predicting ...
+     Predicting - done. Time (sec):  0.0159245
+     
+     Prediction time/pt. (sec) :  0.0001592
+     
+  
+.. figure:: Mixed_Hier_surr_TestMixedInteger_run_mixed_cs_example.png
   :scale: 80	 %
   :align: center
 
@@ -263,14 +454,14 @@ Example of mixed integer Homoscedastic Hypersphere model
 
 .. code-block:: python
 
-  import numpy as np
   import matplotlib.pyplot as plt
+  import numpy as np
   
-  from smt.surrogate_models import KRG, MixIntKernelType
   from smt.applications.mixed_integer import MixedIntegerKrigingModel
+  from smt.surrogate_models import KRG, MixIntKernelType
   from smt.utils.design_space import (
-      DesignSpace,
       CategoricalVariable,
+      DesignSpace,
       FloatVariable,
   )
   
@@ -298,6 +489,7 @@ Example of mixed integer Homoscedastic Hypersphere model
           design_space=design_space,
           categorical_kernel=MixIntKernelType.HOMO_HSPHERE,
           theta0=[1e-1],
+          hyper_opt="Cobyla",
           corr="squar_exp",
           n_start=20,
       ),
@@ -399,20 +591,9 @@ Example of mixed integer Homoscedastic Hypersphere model
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0033653
+     Predicting - done. Time (sec):  0.0152884
      
-     Prediction time/pt. (sec) :  0.0000337
-     
-  ___________________________________________________________________________
-     
-   Evaluation
-     
-        # eval points. : 100
-     
-     Predicting ...
-     Predicting - done. Time (sec):  0.0033021
-     
-     Prediction time/pt. (sec) :  0.0000330
+     Prediction time/pt. (sec) :  0.0001529
      
   ___________________________________________________________________________
      
@@ -421,9 +602,20 @@ Example of mixed integer Homoscedastic Hypersphere model
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0033090
+     Predicting - done. Time (sec):  0.0156202
      
-     Prediction time/pt. (sec) :  0.0000331
+     Prediction time/pt. (sec) :  0.0001562
+     
+  ___________________________________________________________________________
+     
+   Evaluation
+     
+        # eval points. : 100
+     
+     Predicting ...
+     Predicting - done. Time (sec):  0.0000000
+     
+     Prediction time/pt. (sec) :  0.0000000
      
   
 .. figure:: Mixed_Hier_surr_TestMixedInteger_run_mixed_homo_hyp_example.png
@@ -441,14 +633,14 @@ Example of mixed integer Exponential Homoscedastic Hypersphere model
 
 .. code-block:: python
 
-  import numpy as np
   import matplotlib.pyplot as plt
+  import numpy as np
   
-  from smt.surrogate_models import KRG, MixIntKernelType
   from smt.applications.mixed_integer import MixedIntegerKrigingModel
+  from smt.surrogate_models import KRG, MixIntKernelType
   from smt.utils.design_space import (
-      DesignSpace,
       CategoricalVariable,
+      DesignSpace,
       FloatVariable,
   )
   
@@ -475,6 +667,7 @@ Example of mixed integer Exponential Homoscedastic Hypersphere model
       surrogate=KRG(
           design_space=design_space,
           theta0=[1e-1],
+          hyper_opt="Cobyla",
           corr="squar_exp",
           n_start=20,
           categorical_kernel=MixIntKernelType.EXP_HOMO_HSPHERE,
@@ -577,20 +770,9 @@ Example of mixed integer Exponential Homoscedastic Hypersphere model
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0033340
+     Predicting - done. Time (sec):  0.0156219
      
-     Prediction time/pt. (sec) :  0.0000333
-     
-  ___________________________________________________________________________
-     
-   Evaluation
-     
-        # eval points. : 100
-     
-     Predicting ...
-     Predicting - done. Time (sec):  0.0033078
-     
-     Prediction time/pt. (sec) :  0.0000331
+     Prediction time/pt. (sec) :  0.0001562
      
   ___________________________________________________________________________
      
@@ -599,9 +781,20 @@ Example of mixed integer Exponential Homoscedastic Hypersphere model
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0032830
+     Predicting - done. Time (sec):  0.0000000
      
-     Prediction time/pt. (sec) :  0.0000328
+     Prediction time/pt. (sec) :  0.0000000
+     
+  ___________________________________________________________________________
+     
+   Evaluation
+     
+        # eval points. : 100
+     
+     Predicting ...
+     Predicting - done. Time (sec):  0.0156231
+     
+     Prediction time/pt. (sec) :  0.0001562
      
   
 .. figure:: Mixed_Hier_surr_TestMixedInteger_run_mixed_homo_gaussian_example.png
@@ -622,14 +815,19 @@ Example of mixed integer Kriging with hierarchical variables
 .. code-block:: python
 
   import numpy as np
-  from smt.utils.design_space import (
-      DesignSpace,
-      CategoricalVariable,
-      IntegerVariable,
-      FloatVariable,
+  
+  from smt.applications.mixed_integer import (
+      MixedIntegerKrigingModel,
+      MixedIntegerSamplingMethod,
   )
-  from smt.applications.mixed_integer import MixedIntegerKrigingModel
-  from smt.surrogate_models import MixIntKernelType, MixHrcKernelType, KRG
+  from smt.sampling_methods import LHS
+  from smt.surrogate_models import KRG, MixHrcKernelType, MixIntKernelType
+  from smt.utils.design_space import (
+      CategoricalVariable,
+      DesignSpace,
+      FloatVariable,
+      IntegerVariable,
+  )
   
   def f_hv(X):
       import numpy as np
@@ -764,7 +962,12 @@ Example of mixed integer Kriging with hierarchical variables
   
   # Sample from the design spaces, correctly considering hierarchy
   n_doe = 15
-  Xt, Xt_is_acting = design_space.sample_valid_x(n_doe, random_state=42)
+  design_space.seed = 42
+  samp = MixedIntegerSamplingMethod(
+      LHS, design_space, criterion="ese", random_state=design_space.seed
+  )
+  Xt, Xt_is_acting = samp(n_doe, return_is_acting=True)
+  
   Yt = f_hv(Xt)
   
   sm = MixedIntegerKrigingModel(
@@ -773,6 +976,7 @@ Example of mixed integer Kriging with hierarchical variables
           categorical_kernel=MixIntKernelType.HOMO_HSPHERE,
           hierarchical_kernel=MixHrcKernelType.ALG_KERNEL,  # ALG or ARC
           theta0=[1e-2],
+          hyper_opt="Cobyla",
           corr="abs_exp",
           n_start=5,
       ),
@@ -780,10 +984,10 @@ Example of mixed integer Kriging with hierarchical variables
   sm.set_training_values(Xt, Yt, is_acting=Xt_is_acting)
   sm.train()
   y_s = sm.predict_values(Xt)[:, 0]
-  pred_RMSE = np.linalg.norm(y_s - Yt) / len(Yt)
+  _pred_RMSE = np.linalg.norm(y_s - Yt) / len(Yt)
   
   y_sv = sm.predict_variances(Xt)[:, 0]
-  var_RMSE = np.linalg.norm(y_sv) / len(Yt)
+  _var_RMSE = np.linalg.norm(y_sv) / len(Yt)
   
 ::
 
@@ -794,9 +998,9 @@ Example of mixed integer Kriging with hierarchical variables
         # eval points. : 15
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0029173
+     Predicting - done. Time (sec):  0.0000000
      
-     Prediction time/pt. (sec) :  0.0001945
+     Prediction time/pt. (sec) :  0.0000000
      
   
 
@@ -805,3 +1009,5 @@ References
 ----------
 
 .. [1] Saves, P. and Diouane, Y. and Bartoli, N. and Lefebvre, T. and Morlier, J. (2022). A general square exponential kernel to handle mixed-categorical variables for Gaussian process. AIAA Aviation 2022 Forum. 
+
+.. [2] Pelamatti, J. "Mixed-variable Bayesian optimization: application to aerospace system design", PhD thesis, Université de Lille, Lille, 2020.

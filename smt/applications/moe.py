@@ -5,28 +5,17 @@ This package is distributed under New BSD license.
 
 Mixture of Experts
 """
+
 # TODO : support for best number of clusters
 # TODO : implement verbosity 'print_global'
 # TODO : documentation
 
 import numpy as np
-import warnings
-
-OLD_SKLEARN = False
-try:  # scikit-learn < 0.20.0
-    from sklearn.mixture import GMM as GaussianMixture
-
-    OLD_SKLEARN = True
-except:
-    from sklearn.mixture import GaussianMixture
 from scipy.stats import multivariate_normal
+from sklearn.mixture import GaussianMixture
 
-from smt.utils.options_dictionary import OptionsDictionary
 from smt.applications.application import SurrogateBasedApplication
-from smt.utils.misc import compute_rms_error
 from smt.surrogate_models.surrogate_model import SurrogateModel
-
-warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 MOE_EXPERT_NAMES = [
     "KRG",
@@ -245,7 +234,7 @@ class MOE(SurrogateBasedApplication):
 
         self.ndim = nx = x.shape[1]
         xt = self._training_values[:, 0:nx]
-        yt = self._training_values[:, nx : nx + 1]
+        _yt = self._training_values[:, nx : nx + 1]
         ct = self._training_values[:, nx + 1 :]
 
         # Clustering
@@ -570,6 +559,7 @@ class MOE(SurrogateBasedApplication):
             sm.options["print_global"] = False
             sm.set_training_values(training_values[:, 0:dim], training_values[:, dim])
             sm.train()
+            sm.kplsk_second_loop = False
 
             expected = test_values[:, dim]
             actual = sm.predict_values(test_values[:, 0:dim]).reshape(-1)
@@ -646,10 +636,7 @@ class MOE(SurrogateBasedApplication):
         distribs = []
         dim = self.ndim
         means = self.cluster.means_
-        if OLD_SKLEARN:
-            cov = heaviside_factor * self.cluster.covars_
-        else:
-            cov = heaviside_factor * self.cluster.covariances_
+        cov = heaviside_factor * self.cluster.covariances_
         for k in range(self.n_clusters):
             meansk = means[k][0:dim]
             covk = cov[k][0:dim, 0:dim]

@@ -5,11 +5,10 @@ This package is distributed under New BSD license.
 
 N-dimensional step function problem.
 """
-import numpy as np
 
-from smt.utils.options_dictionary import OptionsDictionary
 from smt.problems.problem import Problem
 from smt.problems.tensor_product import TensorProduct
+from smt.utils.options_dictionary import OptionsDictionary
 
 
 class NdimStepFunction(Problem):

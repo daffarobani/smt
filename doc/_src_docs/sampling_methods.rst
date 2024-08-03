@@ -12,14 +12,15 @@ These are listed below.
    sampling_methods/random
    sampling_methods/lhs
    sampling_methods/full_factorial
+   sampling_methods/pydoe
 
 Usage
 -----
 
 .. code-block:: python
 
-  import numpy as np
   import matplotlib.pyplot as plt
+  import numpy as np
   
   from smt.sampling_methods import Random
   
@@ -40,12 +41,12 @@ Usage
 
   (50, 2)
   
-.. figure:: sampling_methods_Test_test_random.png
+.. figure:: sampling_methods_Test_run_random.png
   :scale: 80 %
   :align: center
 
-Problem class API
------------------
+Sampling method class API
+-------------------------
 
 .. autoclass:: smt.sampling_methods.sampling_method.SamplingMethod
 

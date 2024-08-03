@@ -13,19 +13,17 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.11"]
+        python-version: ["3.12"]
         include:
           - os: ubuntu-latest
+            python-version: "3.11"
+          - os: ubuntu-latest
             python-version: "3.10"
-          - os: ubuntu-latest
-            python-version: "3.9"
-          - os: ubuntu-latest
-            python-version: "3.8"
 
     steps:
     - uses: actions/checkout@v4
     - name: Set up python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -39,6 +37,6 @@ jobs:
         pip install -e .
 
     - name: Test with pytest
-      run: pytest smt --durations=0
+      run: pytest -v --durations=0 smt
 
 

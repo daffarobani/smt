@@ -5,10 +5,11 @@ This package is distributed under New BSD license.
 """
 
 import unittest
+
 import numpy as np
+
+from smt.sampling_methods import LHS
 from smt.surrogate_models import KRG
-from smt.problems import Sphere
-from smt.sampling_methods import FullFactorial, LHS
 
 
 class TestKRG(unittest.TestCase):

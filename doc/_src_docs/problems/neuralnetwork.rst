@@ -15,15 +15,20 @@ Usage
 .. code-block:: python
 
   import matplotlib.pyplot as plt
+  
+  from smt.applications.mixed_integer import MixedIntegerSamplingMethod
   from smt.problems import HierarchicalNeuralNetwork
+  from smt.sampling_methods import LHS
   
   problem = HierarchicalNeuralNetwork()
-  
+  ds = problem.design_space
   n_doe = 100
-  xdoe, x_is_acting = problem.design_space.sample_valid_x(
-      n_doe
-  )  # If acting information is needed
-  # xdoe = problem.sample(n_doe)  # Also possible
+  ds.seed = 42
+  samp = MixedIntegerSamplingMethod(
+      LHS, ds, criterion="ese", random_state=ds.seed
+  )
+  xdoe = samp(n_doe)
+  
   y = problem(xdoe)
   
   plt.scatter(xdoe[:, 0], y)
