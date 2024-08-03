@@ -3,14 +3,8 @@ import numpy as np
 
 
 class ShapFeatureImportanceDisplay:
-    def __init__(self, feature_importance, feature_names):
-        if feature_names is None:
-            num_features = len(feature_importance)
-            feature_names = [
-                fr'$x_{i}$' for i in range(num_features)
-            ]
-
-        self.feature_importance = feature_importance
+    def __init__(self, feature_importances, feature_names):
+        self.feature_importances = feature_importances
         self.feature_names = feature_names
 
     @classmethod
@@ -19,30 +13,44 @@ class ShapFeatureImportanceDisplay:
             model,
             x,
             *,
+            features=None,
             feature_names=None,
-            figsize=None,
-            sort=False,
-            categorical_features=None,
+            categorical_feature_indices=None,
     ):
+        if features is None:
+            features = [i for i in range(x.shape[1])]
+
+        if feature_names is None:
+            feature_names = [fr'$x_{i}$' for i in features]
+        elif len(feature_names) != x.shape[1]:
+            raise ValueError("Length of feature names is not the same as the number of dimensions in x.")
+
+        if len(features) <= x.shape[1]:
+            feature_names = [feature_names[feature_idx] for feature_idx in features]
+        else:
+            raise ValueError("Length of features exceed number of dimensions in x.")
+
         num_features = x.shape[1]
         # boolean flags for categorical variable indicator
-        is_categorical = [0] * num_features
-        if categorical_features is not None:
-            for feature_idx in categorical_features:
-                is_categorical[feature_idx] = 1
+        is_categorical = [False] * num_features
+        if categorical_feature_indices is not None:
+            for feature_idx in categorical_feature_indices:
+                is_categorical[feature_idx] = True
         # compute feature importance
-        feature_importance = shap_feature_importance(
+        feature_importances = shap_feature_importance(
             x,
             model,
             x,
             is_categorical,
         )
-        display = ShapFeatureImportanceDisplay(feature_importance, feature_names)
-        return display.plot(figsize=figsize, sort=sort)
+        feature_importances = np.array([feature_importances[feature_idx] for feature_idx in features])
+
+        display = ShapFeatureImportanceDisplay(feature_importances, feature_names)
+        return display
 
     def plot(self, *, figsize=None, sort=False):
         import matplotlib.pyplot as plt
-        from matplotlib.ticker import ScalarFormatter
+        # from matplotlib.ticker import ScalarFormatter
         plt.rcParams.update({
             "text.usetex": False,
             "font.family": "serif",
@@ -50,9 +58,9 @@ class ShapFeatureImportanceDisplay:
             "axes.formatter.use_mathtext": True,
         })
 
-        num_features = len(self.feature_importance)
+        num_features = len(self.feature_importances)
         feature_names = np.array(self.feature_names)
-        feature_importance = np.array(self.feature_importance)
+        feature_importances = np.array(self.feature_importances)
 
         if figsize is None:
             length = max(5, int(num_features * 0.6))
@@ -62,17 +70,17 @@ class ShapFeatureImportanceDisplay:
             width = figsize[1]
 
         if sort:
-            vis_feature_names = feature_names[np.argsort(feature_importance * -1)]
-            vis_feature_importance = feature_importance[np.argsort(feature_importance * -1)]
+            vis_feature_names = feature_names[np.argsort(feature_importances * -1)]
+            vis_feature_importances = feature_importances[np.argsort(feature_importances * -1)]
         else:
             vis_feature_names = feature_names
-            vis_feature_importance = feature_importance
+            vis_feature_importances = feature_importances
 
         indexes = np.arange(num_features)
         fig, ax = plt.subplots(1, 1, figsize=(length, width))
         ax.bar(
             indexes,
-            vis_feature_importance,
+            vis_feature_importances,
             color="blue",
             edgecolor="black",
             linewidth=0.8,
@@ -83,11 +91,9 @@ class ShapFeatureImportanceDisplay:
         ax.grid(color="black", alpha=0.2)
         ax.yaxis.set_tick_params(labelsize=14)
         ax.set_axisbelow(True)
-        formatter = ScalarFormatter()
-        formatter.set_powerlimits((-3, 3))
-        ax.yaxis.set_major_formatter(formatter)
         fig.tight_layout()
 
-        self.fig = fig
+        # Close the figure before returning
+        plt.close(fig)
 
-        return self
+        return fig

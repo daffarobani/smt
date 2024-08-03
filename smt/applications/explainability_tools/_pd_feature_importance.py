@@ -1,11 +1,8 @@
 import numpy as np
 from ._partial_dependence import partial_dependence
 
-def pd_feature_importance_computation(
-        features,
-        is_categorical,
-        pd_results, 
-):
+
+def pd_feature_importance_computation(features, is_categorical, pd_results):
     importances = []
     for i, feature in enumerate(features):
         pd = pd_results[i]['average']
@@ -21,35 +18,33 @@ def pd_feature_importance_computation(
 
 def pd_feature_importance(
         model, 
-        X, 
+        x,
         features, 
         *, 
         sample_weight=None,
-        categorical_features=None,
+        categorical_feature_indices=None,
         percentiles=(0.05, 0.95),
         grid_resolution=100,
-        # uniform="true",
         method="uniform",
         ratio_samples=None
 ):
     pd_results = partial_dependence(
         model, 
-        X, 
+        x,
         features,
         sample_weight=sample_weight,
-        categorical_features=categorical_features,
+        categorical_feature_indices=categorical_feature_indices,
         percentiles=percentiles,
         grid_resolution=grid_resolution,
-        # uniform=uniform,
         method=method,
         kind="average",
         ratio_samples=ratio_samples,
     )
 
-    is_categorical = [0] * X.shape[1]
-    if categorical_features is not None:
-        for feature_index in categorical_features:
-            is_categorical[feature_index] = 1
+    is_categorical = [False] * x.shape[1]
+    if categorical_feature_indices is not None:
+        for feature_idx in categorical_feature_indices:
+            is_categorical[feature_idx] = True
 
     importances = pd_feature_importance_computation(
         features, 

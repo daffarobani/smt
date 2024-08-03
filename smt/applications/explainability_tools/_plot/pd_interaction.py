@@ -18,12 +18,9 @@ class PDFeatureInteractionDisplay:
             x,
             *,
             features=None,
-            categorical_features=None,
+            categorical_feature_indices=None,
             feature_names=None,
             ratio_samples=None,
-            figsize=None,
-            sort=False,
-            vert=False,
     ):
         if features is None:
             features = [i for i in range(x.shape[1])]
@@ -37,19 +34,12 @@ class PDFeatureInteractionDisplay:
             features,
             x,
             model,
-            categorical_features=categorical_features,
+            categorical_feature_indices=categorical_feature_indices,
             ratio_samples=ratio_samples,
         )
 
-        display = PDFeatureInteractionDisplay(
-            h_scores,
-            feature_names,
-        )
-        return display.plot(
-            figsize=figsize,
-            sort=sort,
-            vert=vert,
-        )
+        display = PDFeatureInteractionDisplay(h_scores, feature_names)
+        return display
 
     @classmethod
     def pairwise_interaction(
@@ -58,12 +48,9 @@ class PDFeatureInteractionDisplay:
             x,
             feature_pairs,
             *,
-            categorical_features=None,
+            categorical_feature_indices=None,
             feature_names=None,
             ratio_samples=None,
-            figsize=None,
-            sort=False,
-            vert=False,
     ):
         if feature_names is None:
             feature_names = [
@@ -78,36 +65,18 @@ class PDFeatureInteractionDisplay:
             feature_pairs,
             x,
             model,
-            categorical_features=categorical_features,
+            categorical_feature_indices=categorical_feature_indices,
             ratio_samples=ratio_samples,
         )
-
-        if figsize is None:
-            length = max(
-                5,
-                int(len(h_scores) * 1.0)
-            )
-            width = 4
-            figsize = (length, width)
 
         display = PDFeatureInteractionDisplay(
             h_scores,
             interaction_feature_names,
         )
 
-        return display.plot(
-            figsize=figsize,
-            sort=sort,
-            vert=vert,
-        )
+        return display
 
-    def plot(
-            self,
-            *,
-            figsize=None,
-            sort=False,
-            vert=False,
-    ):
+    def plot(self, *, figsize=None, sort=False, vert=False):
         import matplotlib.pyplot as plt
         plt.rcParams.update({
             "text.usetex": False,
@@ -155,4 +124,7 @@ class PDFeatureInteractionDisplay:
         ax.grid(color="black", alpha=0.2)
         ax.set_axisbelow(True)
         fig.tight_layout()
-        return self
+
+        # Close the figure before returning
+        plt.close(fig)
+        return fig

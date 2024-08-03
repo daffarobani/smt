@@ -1,5 +1,5 @@
 from itertools import product
-from scipy import stats
+# from scipy import stats
 from scipy.special import comb
 import numpy as np
 
@@ -23,13 +23,7 @@ def calculate_weight(mask_row):
     return weight
 
 
-def compute_shap_values(
-    mask,
-    s_full,
-    weights,
-    reference_values,
-    model,
-):
+def compute_shap_values(mask, s_full, weights, reference_values, model):
     y = model.predict_values(s_full)
     # b0 = model.predict_values(reference_values.reshape(1, -1))
     b0 = model.predict_values(reference_values)
@@ -45,12 +39,7 @@ def compute_shap_values(
     return b
 
 
-def individual_shap_values(
-    instances,
-    model,
-    x,
-    is_categorical,
-):
+def individual_shap_values(instances, model, x, is_categorical):
     # reference_values = get_reference_feature_values(x, is_categorical)
     shap_values = list()
 
@@ -68,13 +57,7 @@ def individual_shap_values(
         s_full = s_ref + s_real
 
         weights = np.apply_along_axis(calculate_weight, 1, mask)
-        shap_value = compute_shap_values(
-            mask,
-            s_full,
-            weights,
-            reference_values,
-            model,
-        )
+        shap_value = compute_shap_values(mask, s_full, weights, reference_values, model)
         shap_values.append(shap_value)
     shap_values = np.array(shap_values)
     return shap_values
@@ -82,12 +65,12 @@ def individual_shap_values(
 
 def get_reference_feature_values(x, is_categorical):
     # get reference values for each feature
-    # if the feature is categorical/ordinal -> mode
+    # if the feature is categorical/ordinal -> random
     # else -> mean
     num_features = x.shape[1]
     reference_values = np.zeros(num_features)
     for feature_idx in range(num_features):
-        if is_categorical[feature_idx] == 1:
+        if is_categorical[feature_idx]:
             # mode = stats.mode(x[:, feature_idx], keepdims=False)[0]
             # reference_values[feature_idx] = mode
             reference_values[feature_idx] = np.random.choice(x[:, feature_idx])
@@ -97,50 +80,50 @@ def get_reference_feature_values(x, is_categorical):
     return reference_values
 
 
-def compute_shap_values_2(
-    mask,
-    s_full,
-    weights,
-    model,
-):
-    y = model.predict_values(s_full)
-    mask_2 = np.ones((mask.shape[0], mask.shape[1]+1))
-    mask_2[:, :-1] = mask
+# def compute_shap_values_2(
+#     mask,
+#     s_full,
+#     weights,
+#     model,
+# ):
+#     y = model.predict_values(s_full)
+#     mask_2 = np.ones((mask.shape[0], mask.shape[1]+1))
+#     mask_2[:, :-1] = mask
+#
+#     w = np.diag(weights)
+#     w = np.sqrt(w)
+#
+#     b = np.dot(
+#         np.linalg.inv(np.dot(np.dot(mask_2.transpose(), w), mask_2)),
+#         np.dot(np.dot(mask_2.transpose(), w), y)
+#     )
+#     b = b.reshape(-1, )
+#     b = b[:-1]
+#
+#     return b
 
-    w = np.diag(weights)
-    w = np.sqrt(w)
 
-    b = np.dot(
-        np.linalg.inv(np.dot(np.dot(mask_2.transpose(), w), mask_2)),
-        np.dot(np.dot(mask_2.transpose(), w), y)
-    )
-    b = b.reshape(-1, )
-    b = b[:-1]
-
-    return b
-
-
-def individual_shap_values_2(
-    instances,
-    model,
-    x,
-):
-    shap_values = list()
-
-    for instance in instances:
-        instance = instance.reshape(1, -1)
-        mask = create_mask_array(instance.shape[1])
-        mask = np.repeat(mask, 10, axis=0)
-        weights = np.apply_along_axis(calculate_weight, 1, mask)
-
-        s_full = np.where(mask == 1, instance, x[np.random.randint(x.shape[0])])
-
-        shap_value = compute_shap_values_2(
-            mask,
-            s_full,
-            weights,
-            model,
-        )
-        shap_values.append(shap_value)
-    shap_values = np.array(shap_values)
-    return shap_values
+# def individual_shap_values_2(
+#     instances,
+#     model,
+#     x,
+# ):
+#     shap_values = list()
+#
+#     for instance in instances:
+#         instance = instance.reshape(1, -1)
+#         mask = create_mask_array(instance.shape[1])
+#         mask = np.repeat(mask, 10, axis=0)
+#         weights = np.apply_along_axis(calculate_weight, 1, mask)
+#
+#         s_full = np.where(mask == 1, instance, x[np.random.randint(x.shape[0])])
+#
+#         shap_value = compute_shap_values_2(
+#             mask,
+#             s_full,
+#             weights,
+#             model,
+#         )
+#         shap_values.append(shap_value)
+#     shap_values = np.array(shap_values)
+#     return shap_values

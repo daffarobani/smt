@@ -61,7 +61,7 @@ Example of mixed integer Polynomial (QP) surrogate
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0000231
+     Predicting - done. Time (sec):  0.0000160
      
      Prediction time/pt. (sec) :  0.0000002
      
@@ -221,20 +221,9 @@ Example of mixed integer Gower Distance model
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0045669
+     Predicting - done. Time (sec):  0.0028670
      
-     Prediction time/pt. (sec) :  0.0000457
-     
-  ___________________________________________________________________________
-     
-   Evaluation
-     
-        # eval points. : 100
-     
-     Predicting ...
-     Predicting - done. Time (sec):  0.0044310
-     
-     Prediction time/pt. (sec) :  0.0000443
+     Prediction time/pt. (sec) :  0.0000287
      
   ___________________________________________________________________________
      
@@ -243,9 +232,20 @@ Example of mixed integer Gower Distance model
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0044260
+     Predicting - done. Time (sec):  0.0028043
      
-     Prediction time/pt. (sec) :  0.0000443
+     Prediction time/pt. (sec) :  0.0000280
+     
+  ___________________________________________________________________________
+     
+   Evaluation
+     
+        # eval points. : 100
+     
+     Predicting ...
+     Predicting - done. Time (sec):  0.0028021
+     
+     Prediction time/pt. (sec) :  0.0000280
      
   
 .. figure:: Mixed_Hier_surr_TestMixedInteger_run_mixed_gower_example.png
@@ -399,20 +399,9 @@ Example of mixed integer Homoscedastic Hypersphere model
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0055492
+     Predicting - done. Time (sec):  0.0033653
      
-     Prediction time/pt. (sec) :  0.0000555
-     
-  ___________________________________________________________________________
-     
-   Evaluation
-     
-        # eval points. : 100
-     
-     Predicting ...
-     Predicting - done. Time (sec):  0.0054872
-     
-     Prediction time/pt. (sec) :  0.0000549
+     Prediction time/pt. (sec) :  0.0000337
      
   ___________________________________________________________________________
      
@@ -421,9 +410,20 @@ Example of mixed integer Homoscedastic Hypersphere model
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0054410
+     Predicting - done. Time (sec):  0.0033021
      
-     Prediction time/pt. (sec) :  0.0000544
+     Prediction time/pt. (sec) :  0.0000330
+     
+  ___________________________________________________________________________
+     
+   Evaluation
+     
+        # eval points. : 100
+     
+     Predicting ...
+     Predicting - done. Time (sec):  0.0033090
+     
+     Prediction time/pt. (sec) :  0.0000331
      
   
 .. figure:: Mixed_Hier_surr_TestMixedInteger_run_mixed_homo_hyp_example.png
@@ -577,20 +577,9 @@ Example of mixed integer Exponential Homoscedastic Hypersphere model
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0054858
+     Predicting - done. Time (sec):  0.0033340
      
-     Prediction time/pt. (sec) :  0.0000549
-     
-  ___________________________________________________________________________
-     
-   Evaluation
-     
-        # eval points. : 100
-     
-     Predicting ...
-     Predicting - done. Time (sec):  0.0054862
-     
-     Prediction time/pt. (sec) :  0.0000549
+     Prediction time/pt. (sec) :  0.0000333
      
   ___________________________________________________________________________
      
@@ -599,9 +588,20 @@ Example of mixed integer Exponential Homoscedastic Hypersphere model
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0053871
+     Predicting - done. Time (sec):  0.0033078
      
-     Prediction time/pt. (sec) :  0.0000539
+     Prediction time/pt. (sec) :  0.0000331
+     
+  ___________________________________________________________________________
+     
+   Evaluation
+     
+        # eval points. : 100
+     
+     Predicting ...
+     Predicting - done. Time (sec):  0.0032830
+     
+     Prediction time/pt. (sec) :  0.0000328
      
   
 .. figure:: Mixed_Hier_surr_TestMixedInteger_run_mixed_homo_gaussian_example.png
@@ -794,9 +794,9 @@ Example of mixed integer Kriging with hierarchical variables
         # eval points. : 15
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0046661
+     Predicting - done. Time (sec):  0.0029173
      
-     Prediction time/pt. (sec) :  0.0003111
+     Prediction time/pt. (sec) :  0.0001945
      
   
 

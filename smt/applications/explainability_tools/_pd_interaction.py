@@ -7,107 +7,79 @@ from ._partial_dependence import partial_dependence
 
 def pd_pairwise_interaction(
         feature_pairs,
-        X,
+        x,
         model,
         *,
         ratio_samples=None,
-        categorical_features=None,
+        categorical_feature_indices=None,
 ):
     if ratio_samples is None:
-        X_eval = X.copy()
+        x_eval = x.copy()
     else:
-        num_samples = int(ratio_samples*len(X))
-        indexes = np.random.choice(
-            X.shape[0],
-            size=num_samples,
-            replace=False
-        )
-        X_eval = X[indexes]
+        num_samples = int(ratio_samples*len(x))
+        indexes = np.random.choice(x.shape[0], size=num_samples, replace=False)
+        x_eval = x[indexes]
 
     h_scores = list()
     for feature_pair in feature_pairs:
         feature_i = feature_pair[0]
         feature_j = feature_pair[1]
-        pd_features = [
-            feature_i,
-            feature_j,
-            (feature_i, feature_j),
-        ]
+        pd_features = [feature_i, feature_j, (feature_i, feature_j)]
 
         pd_results = partial_dependence(
             model,
-            X_eval,
+            x_eval,
             pd_features,
-            categorical_features=categorical_features,
+            categorical_feature_indices=categorical_feature_indices,
             method="sample",
             kind="average",
         )
         average_i = pd_results[0]["average"]
         average_j = pd_results[1]["average"]
         average_ij = pd_results[2]["average"]
-        h_score = compute_h_score(
-            average_ij,
-            average_i,
-            average_j,
-        )
-
+        h_score = compute_h_score(average_ij, average_i, average_j)
         h_scores.append(h_score)
     return h_scores
 
 
 def pd_overall_interaction(
         features,
-        X,
+        x,
         model,
         *,
         ratio_samples=None,
-        categorical_features=None,
+        categorical_feature_indices=None,
 ):
     if ratio_samples is None:
-        X_eval = X.copy()
+        x_eval = x.copy()
     else:
-        num_samples = int(ratio_samples * len(X))
-        indexes = np.random.choice(
-            X.shape[0],
-            size=num_samples,
-            replace=False
-        )
-        X_eval = X[indexes]
+        num_samples = int(ratio_samples * len(x))
+        indexes = np.random.choice(x.shape[0], size=num_samples, replace=False)
+        x_eval = x[indexes]
 
     h_scores = list()
-    for feature in features:
-        other_features = [f for f in range(X_eval.shape[1]) if f != feature]
-        pd_features = [
-            feature,
-            other_features,
-        ]
+    for current_feature in features:
+        other_features = [f for f in range(x_eval.shape[1]) if f != current_feature]
+        pd_features = [current_feature, other_features]
 
         pd_results = partial_dependence(
             model,
-            X_eval,
+            x_eval,
             pd_features,
-            categorical_features=categorical_features,
+            categorical_feature_indices=categorical_feature_indices,
             method="sample",
             kind="average",
         )
-        average_on_feature = pd_results[0]["average"]
-        average_on_other = pd_results[1]["average"]
-        y_pred = model.predict_values(X_eval).reshape(-1, )
-        h_score = compute_h_score(
-            y_pred,
-            average_on_feature,
-            average_on_other,
-        )
+        average_on_current_feature = pd_results[0]["average"]
+        average_on_other_features = pd_results[1]["average"]
+        y_pred = model.predict_values(x_eval).reshape(-1, )
+        h_score = compute_h_score(y_pred, average_on_current_feature, average_on_other_features)
         h_scores.append(h_score)
 
     return h_scores
 
 
-def compute_h_score(
-        ref_values,
-        explainer_first,
-        explainer_second,
-):
+def compute_h_score(ref_values, explainer_first, explainer_second):
     # center to make mean equals zero
     ref_values = ref_values - ref_values.mean()
     explainer_first = explainer_first - explainer_first.mean()

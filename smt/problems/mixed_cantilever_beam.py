@@ -1,14 +1,16 @@
 """
-Author: P.Saves 
+Author: P.Saves
 This package is distributed under New BSD license.
 
 Cantilever beam problem from:
-P. Saves, Y. Diouane, N. Bartoli, T. Lefebvre, and J. Morlier. A mixed-categorical correlation kernel for gaussian process, 2022
+P. Saves, Y. Diouane, N. Bartoli, T. Lefebvre, and J. Morlier.
+A mixed-categorical correlation kernel for gaussian process, 2022
 """
+
 import numpy as np
 
 from smt.problems.problem import Problem
-from smt.utils.design_space import DesignSpace, FloatVariable, CategoricalVariable
+from smt.utils.design_space import CategoricalVariable, DesignSpace, FloatVariable
 
 
 class MixedCantileverBeam(Problem):
@@ -60,7 +62,7 @@ class MixedCantileverBeam(Problem):
         """
         P = self.options["P"]
         E = self.options["E"]
-        I = np.int64(x[:, 0]) - 1
+        I = np.int64(x[:, 0]) - 1  # noqa: E741
         L = x[:, 1]
         S = x[:, 2]
         Ival = np.array([self.listI[i] for i in I])

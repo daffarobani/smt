@@ -2,35 +2,31 @@
 # Authors: Muhammad Daffa Robani
 import numpy as np
 from scipy.stats.mstats import mquantiles
+from typing import Union, List, Tuple
 
 
 def grid_from_x(
-        X, 
-        features, 
-        percentiles, 
-        grid_resolution, 
-        is_categorical, 
-        method,
-        # uniform,
+    x,
+    features,
+    percentiles,
+    grid_resolution,
+    is_categorical,
+    method,
 ):
-    # method: ["uniform", "unique", "sample"]
-    if type(features) is int:
+    if isinstance(features, int):
         features = tuple([features])
+
     grid_values = []
     for i in features:
-        # if is_categorical[i] or not uniform:
-        #     axis = np.unique(X[:, i])
-        # else:
-        #     emp_percentiles = mquantiles(X[:, i], prob=percentiles, axis=0)
-        #     axis = np.linspace(emp_percentiles[0], emp_percentiles[1], num=grid_resolution, endpoint=True)
         if method == "sample":
-            axis = X[:, i]
+            axis = x[:, i]
+        elif method == "unique" or is_categorical[i]:
+            axis = np.unique(x[:, i])
+        elif method == "uniform":
+            emp_percentiles = mquantiles(x[:, i], prob=percentiles, axis=0)
+            axis = np.linspace(emp_percentiles[0], emp_percentiles[1], num=grid_resolution, endpoint=True)
         else:
-            if is_categorical[i] or method == "unique":
-                axis = np.unique(X[:, i])
-            else:
-                emp_percentiles = mquantiles(X[:, i], prob=percentiles, axis=0)
-                axis = np.linspace(emp_percentiles[0], emp_percentiles[1], num=grid_resolution, endpoint=True)
+            raise ValueError("Method must be 'sample' / 'unique' / 'uniform'.")
 
         grid_values.append(axis)
 
@@ -38,85 +34,83 @@ def grid_from_x(
         grid_2d = cartesian(grid_values)
     else:
         grid_2d = non_cartesian(grid_values)
-    # return cartesian(grid_values), grid_values
     return grid_2d, grid_values
 
 
 def _partial_dependence_brute(
-    model, 
-    grid_cartesian, 
-    grid_values, 
-    features, 
-    X,
+    model,
+    grid_cartesian,
+    grid_values,
+    features,
+    x,
     method,
-    sample_weight=None, 
+    sample_weight=None,
     ratio_samples=None,
-):    
-    if type(features) is int:
+):
+    if isinstance(features, int):
         features = tuple([features])
 
-    nsamp = len(X)
+    nsamp = len(x)
     lengths = [len(grid_value) for grid_value in grid_values]
     predictions = []
     averaged_predictions = []
     if ratio_samples is None:
         nsamples = nsamp
-        X_samp = X.copy()
+        x_samp = x.copy()
     else:
         nsamples = int(ratio_samples * nsamp)
-        index = np.random.choice(nsamp, nsamples, replace=False) 
-        X_samp = X[index]
+        index = np.random.choice(nsamp, nsamples, replace=False)
+        x_samp = x[index]
 
     for new_values in grid_cartesian:
-        X_eval = X_samp.copy()
+        x_eval = x_samp.copy()
         for i, feature in enumerate(features):
-            X_eval[:, feature] = new_values[i]
+            x_eval[:, feature] = new_values[i]
         try:
-            pred = model.predict_values(X_eval) 
+            pred = model.predict_values(x_eval)
         except AttributeError:
-            pred = model.predict(X_eval)
+            pred = model.predict(x_eval)
         averaged_pred = np.average(pred, weights=sample_weight)
 
         predictions.append(pred)
         averaged_predictions.append(averaged_pred)
-        
+
     predictions = np.array(predictions).T
     averaged_predictions = np.array(averaged_predictions).T
 
     if method != "sample":
         predictions = predictions.reshape([nsamples]+lengths)
         averaged_predictions = averaged_predictions.reshape(lengths)
-    
+
     return averaged_predictions, predictions
 
 
 def partial_dependence(
-        model,
-        X,
-        features,
-        *,
-        sample_weight=None,
-        categorical_features=None,
-        percentiles=(0.05, 0.95),
-        grid_resolution=100,
-        kind="average",
-        # uniform="true",
-        method="uniform",
-        ratio_samples=None,
-        inverse_categories_map=None,
+    model,
+    x,
+    features: Union[List, Tuple],
+    *,
+    sample_weight=None,
+    categorical_feature_indices: List = None,
+    percentiles=(0.05, 0.95),
+    grid_resolution=100,
+    kind="average",
+    method="uniform",
+    ratio_samples=None,
+    categories_map=None,
 ):
     """
     Partial dependence.
-    
+
     Parameters
     ----------
     - model
-    - 
-    
-    Returns 
+    -
+
+    Returns
     ----------
-    
-    
+
+
     """
     # to do: check if the model is fitted
     pass
@@ -133,70 +127,42 @@ def partial_dependence(
                 features[i] = feature[0]
             elif len(feature) == 2:
                 features[i] = tuple(feature)
-                # raise ValueError("Interaction of features hasn't been developed")
             else:
                 if method != "sample":
                     raise ValueError("Interaction features can't be more than two.")
 
-    is_categorical = [0] * X.shape[1]
-    if categorical_features is not None:
-        for feature_index in categorical_features:
-            is_categorical[feature_index] = 1
-     
+    # list to store the features are categorical or not in x
+    is_categorical = [False] * x.shape[1]
+    if categorical_feature_indices is not None:
+        for feature_idx in categorical_feature_indices:
+            is_categorical[feature_idx] = True
+
     pdp_results = []
     for feature in features:
-        pdp_result = {}
-        # create grid 
+        # create grid
         grid_cartesian, grid_values = grid_from_x(
-            X, 
-            feature, 
-            percentiles, 
-            grid_resolution, 
-            is_categorical, 
-            # uniform,
+            x,
+            feature,
+            percentiles,
+            grid_resolution,
+            is_categorical,
             method,
             )
-        
+
         # predictions
         averaged_predictions, predictions = _partial_dependence_brute(
-            model, 
-            grid_cartesian, 
-            grid_values, 
-            feature, 
-            X,
+            model,
+            grid_cartesian,
+            grid_values,
+            feature,
+            x,
             method,
             sample_weight,
             ratio_samples,
             )
-        
-        if type(feature) is int:
-            is_categories = [is_categorical[feature]]
-        else:
-            is_categories = [is_categorical[f] for f in feature]
-        has_categories = np.max(is_categories) == 1
 
-        if has_categories == 1:
-            grid_categories = []
-            for i, (is_category, grid_values_) in enumerate(zip(is_categories, grid_values)):
-                if is_category == 1:
-                    if inverse_categories_map is not None:
-                        if type(feature) is int:
-                            f = feature
-                        else:
-                            f = feature[i]
-                        grid_categories_ = [inverse_categories_map[f][i] for i in grid_values_]
-                    else:
-                        grid_categories_ = [value for value in grid_values_]
-                else:
-                    grid_categories_ = []
-
-                grid_categories_ = np.array(grid_categories_)
-                grid_categories.append(grid_categories_)
-        
-        # store
-        pdp_result['grid_values'] = grid_values
-        if has_categories == 1:
-            pdp_result['grid_categories'] = grid_categories
+        # storing values
+        pdp_result = {'grid_values': grid_values}
         if kind == "average":
             pdp_result['average'] = averaged_predictions
         elif kind == "individual":
@@ -204,7 +170,35 @@ def partial_dependence(
         else:
             pdp_result['average'] = averaged_predictions
             pdp_result['individual'] = predictions
+
+        # if there's categorical features, store grid categories
+        if isinstance(feature, int):
+            is_categories = [is_categorical[feature]]
+        else:
+            is_categories = [is_categorical[f] for f in feature]
+        has_categories = max(is_categories) is True
+
+        if has_categories == 1:
+            grid_categories = []
+            for i, (is_category, grid_values_) in enumerate(zip(is_categories, grid_values)):
+                if is_category:
+                    if categories_map is not None:
+                        if isinstance(feature, int):
+                            f = feature
+                        else:
+                            f = feature[i]
+                        grid_categories_ = [categories_map[f][i] for i in grid_values_]
+                    else:
+                        grid_categories_ = [value for value in grid_values_]
+                else:
+                    grid_categories_ = []
+
+                grid_categories_ = np.array(grid_categories_)
+                grid_categories.append(grid_categories_)
+            pdp_result['grid_categories'] = grid_categories
+
         pdp_results.append(pdp_result)
+
     return pdp_results
 
 
@@ -225,9 +219,6 @@ def cartesian(arrays, out=None):
         If not provided, the `dtype` of the output array is set to the most
         permissive `dtype` of the input arrays, according to NumPy type
         promotion.
-
-        .. versionadded:: 1.2
-           Add support for arrays of different types.
 
     Notes
     -----
