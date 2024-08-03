@@ -5,6 +5,7 @@ from matplotlib.ticker import ScalarFormatter
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpecFromSubplotSpec
 plt.rcParams.update({
     "text.usetex": False,
     "font.family": "serif",
@@ -50,16 +51,16 @@ class ShapDisplay:
         x,
         *,
         feature_names=None,
-        categorical_features=None,
+        categorical_feature_indices=None,
         categories_map=None,
     ):
         num_features = x.shape[1]
 
         # boolean flags for categorical variable indicator
-        is_categorical = [0] * num_features
-        if categorical_features is not None:
-            for feature_idx in categorical_features:
-                is_categorical[feature_idx] = 1
+        is_categorical = [False] * num_features
+        if categorical_feature_indices is not None:
+            for feature_idx in categorical_feature_indices:
+                is_categorical[feature_idx] = True
 
         shap_values = individual_shap_values(
             instances,
@@ -81,7 +82,6 @@ class ShapDisplay:
         *,
         index=None,
         figsize=None,
-        filename=None,
     ):
         num_features = self.shap_values.shape[1]
         feature_names = self.feature_names
@@ -139,8 +139,10 @@ class ShapDisplay:
         ax.xaxis.set_major_formatter(formatter)
         fig.tight_layout()
 
-        if filename is not None:
-            plt.savefig(filename)
+        # Close the figure before returning
+        plt.close(fig)
+
+        return fig
 
     def dependence_plot(
         self,
@@ -148,7 +150,6 @@ class ShapDisplay:
         *,
         n_cols=3,
         figsize=None,
-        filename=None,
         sort_based_on_importance: Union[bool, dict] = True,
         max_num_entities: Union[int, dict] = 15,
         selected_entities=None,
@@ -162,28 +163,27 @@ class ShapDisplay:
         for feature_id in range(len(is_categorical)):
             if is_categorical[feature_id] == 1:
                 category_args = dict()
-
-                if type(sort_based_on_importance) is dict:
+                if isinstance(sort_based_on_importance, dict):
                     if feature_id in sort_based_on_importance:
                         category_args["sort_based_on_importance"] = sort_based_on_importance[feature_id]
                     else:
                         category_args["sort_based_on_importance"] = True
-                elif type(sort_based_on_importance) is bool:
+                elif isinstance(sort_based_on_importance, bool):
                     category_args["sort_based_on_importance"] = sort_based_on_importance
                 else:
                     raise ValueError
 
-                if type(max_num_entities) is dict:
+                if isinstance(max_num_entities, dict):
                     if feature_id in max_num_entities:
                         category_args["max_num_entities"] = max_num_entities[feature_id]
                     else:
                         category_args["max_num_entities"] = 15
-                elif type(max_num_entities) is int:
+                elif isinstance(max_num_entities, int):
                     category_args["max_num_entities"] = max_num_entities
                 else:
                     raise ValueError
 
-                if type(selected_entities) is dict:
+                if isinstance(selected_entities, dict):
                     if feature_id in selected_entities:
                         category_args["selected_entities"] = selected_entities[feature_id]
                     else:
@@ -191,7 +191,7 @@ class ShapDisplay:
                 else:
                     category_args["selected_entities"] = None
 
-                if type(selected_entity_values) is dict:
+                if isinstance(selected_entity_values, dict):
                     if feature_id in selected_entity_values:
                         category_args["selected_entity_values"] = selected_entity_values[feature_id]
                     else:
@@ -202,29 +202,38 @@ class ShapDisplay:
                 categories_args[feature_id] = category_args
 
         n_rows = int(np.ceil(len(features)/n_cols))
-        if figsize is None:
-            length = n_cols * 7
-            width = n_rows * 5
-        else:
-            length = figsize[0]
-            width = figsize[1]
-
-        fig, axs = plt.subplots(n_rows, n_cols, figsize=(length, width))
+        # fig, axs = plt.subplots(n_rows, n_cols, figsize=(length, width))
         # delete empty subplot
-        fig = delete_empty_axis(len(features), fig, axs)
+        # fig = delete_empty_axis(len(features), fig, axs)
 
-        # _, axs = plt.subplots()
+        _, axs = plt.subplots()
+        axs.set_axis_off()
+        axes_ = np.empty((n_rows, n_cols), dtype=object)
+        figure_ = axs.figure
+        if figsize is None:
+            figure_.set_size_inches(n_cols * 7, n_rows * 5)
+        else:
+            figure_.set_size_inches(figsize[0], figsize[1])
+
+        axes_ravel = axes_.ravel()
+        gs = GridSpecFromSubplotSpec(
+            n_rows, n_cols, subplot_spec=axs.get_subplotspec()
+        )
+
+        for i, spec in zip(range(len(features)), gs):
+            axes_ravel[i] = figure_.add_subplot(spec)
 
         formatter = ScalarFormatter()
         formatter.set_powerlimits((-3, 3))
 
         for i, feature_idx in enumerate(features):
-            row = i // n_cols
+            # row = i // n_cols
             col = i % n_cols
-            if n_rows == 1:
-                ax = axs[col]
-            else:
-                ax = axs[row, col]
+            # if n_rows == 1:
+            #     ax = axs[col]
+            # else:
+            #     ax = axs[row, col]
+            ax = axes_ravel[i]
 
             if is_categorical[feature_idx] == 1:
                 categorical_dependence_plot(
@@ -252,10 +261,12 @@ class ShapDisplay:
             ax.xaxis.set_tick_params(labelsize=14)
             ax.yaxis.set_tick_params(labelsize=14)
             ax.grid(color="black", alpha=0.2)
-            fig.tight_layout()
 
-        if filename is not None:
-            plt.savefig(filename, format="pdf", bbox_inches="tight", dpi=750)
+        figure_.tight_layout()
+        # Close the figure before returning
+        plt.close(figure_)
+
+        return figure_
 
     def interaction_plot(
         self,
@@ -264,7 +275,6 @@ class ShapDisplay:
         n_cols=3,
         n_color=10,
         figsize=None,
-        filename=None,
         sort_based_on_importance: Union[bool, dict] = True,
         max_num_entities: Union[int, dict] = 15,
         selected_entities=None,
@@ -279,27 +289,27 @@ class ShapDisplay:
             if is_categorical[feature_id] == 1:
                 category_args = dict()
 
-                if type(sort_based_on_importance) is dict:
+                if isinstance(sort_based_on_importance, dict):
                     if feature_id in sort_based_on_importance:
                         category_args["sort_based_on_importance"] = sort_based_on_importance[feature_id]
                     else:
                         category_args["sort_based_on_importance"] = True
-                elif type(sort_based_on_importance) is bool:
+                elif isinstance(sort_based_on_importance, bool):
                     category_args["sort_based_on_importance"] = sort_based_on_importance
                 else:
                     raise ValueError
 
-                if type(max_num_entities) is dict:
+                if isinstance(max_num_entities, dict):
                     if feature_id in max_num_entities:
                         category_args["max_num_entities"] = max_num_entities[feature_id]
                     else:
                         category_args["max_num_entities"] = 15
-                elif type(max_num_entities) is int:
+                elif isinstance(max_num_entities, int):
                     category_args["max_num_entities"] = max_num_entities
                 else:
                     raise ValueError
 
-                if type(selected_entities) is dict:
+                if isinstance(selected_entities, dict):
                     if feature_id in selected_entities:
                         category_args["selected_entities"] = selected_entities[feature_id]
                     else:
@@ -307,7 +317,7 @@ class ShapDisplay:
                 else:
                     category_args["selected_entities"] = None
 
-                if type(selected_entity_values) is dict:
+                if isinstance(selected_entity_values, dict):
                     if feature_id in selected_entity_values:
                         category_args["selected_entity_values"] = selected_entity_values[feature_id]
                     else:
@@ -372,14 +382,14 @@ class ShapDisplay:
             ax.grid(color="black", alpha=0.2)
 
         fig.tight_layout()
-        if filename is not None:
-            plt.savefig(filename)
+        # Close the figure before returning
+        plt.close(fig)
+        return fig
 
     def summary_plot(
         self,
         *,
         figsize=None,
-        filename=None,
         n_color=10,
         include_cat=False,
         max_num_features=10,
@@ -518,8 +528,9 @@ class ShapDisplay:
 
         fig.tight_layout()
 
-        if filename is not None:
-            plt.savefig(filename)
+        # Close the figure before returning
+        plt.close(fig)
+        return fig
 
 
 def jitter_y_based_on_x(

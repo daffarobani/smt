@@ -9,5 +9,5 @@ def shap_feature_importance(instances, model, x, is_categorical):
         x,
         is_categorical,
     )
-    feature_importance = np.abs(shap_values).mean(axis=0)
-    return feature_importance
+    feature_importances = np.abs(shap_values).mean(axis=0)
+    return feature_importances

@@ -1,9 +1,9 @@
-from ._shap_values import individual_shap_values_2
+from ._shap_values import individual_shap_values
 import numpy as np
 
 
-def shap_feature_importance_2(instances, model, x):
-    shap_values = individual_shap_values_2(
+def shap_feature_importance(instances, model, x):
+    shap_values = individual_shap_values(
         instances,
         model,
         x,

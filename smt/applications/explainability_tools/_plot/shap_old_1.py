@@ -5,7 +5,6 @@ from matplotlib.ticker import ScalarFormatter
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpecFromSubplotSpec
 plt.rcParams.update({
     "text.usetex": False,
     "font.family": "serif",
@@ -21,7 +20,7 @@ NOMINAL_COLORS = [
 ]
 
 
-class ShapDisplay2:
+class ShapDisplay:
     def __init__(
         self,
         instances,
@@ -68,7 +67,7 @@ class ShapDisplay2:
             x,
             is_categorical,
         )
-        display = ShapDisplay2(
+        display = ShapDisplay(
             instances,
             shap_values,
             is_categorical,
@@ -210,38 +209,22 @@ class ShapDisplay2:
             length = figsize[0]
             width = figsize[1]
 
-        # fig, axs = plt.subplots(n_rows, n_cols, figsize=(length, width))
+        fig, axs = plt.subplots(n_rows, n_cols, figsize=(length, width))
         # delete empty subplot
-        # fig = delete_empty_axis(len(features), fig, axs)
+        fig = delete_empty_axis(len(features), fig, axs)
 
-        _, axs = plt.subplots()
-        axs.set_axis_off()
-        axes_ = np.empty((n_rows, n_cols), dtype=object)
-        figure_ = axs.figure
-        if figsize is None:
-            figure_.set_size_inches(n_cols * 7, n_rows * 5)
-        else:
-            figure_.set_size_inches(figsize[0], figsize[1])
-
-        axes_ravel = axes_.ravel()
-        gs = GridSpecFromSubplotSpec(
-            n_rows, n_cols, subplot_spec=axs.get_subplotspec()
-        )
-
-        for i, spec in zip(range(len(features)), gs):
-            axes_ravel[i] = figure_.add_subplot(spec)
+        # _, axs = plt.subplots()
 
         formatter = ScalarFormatter()
         formatter.set_powerlimits((-3, 3))
 
         for i, feature_idx in enumerate(features):
-            # row = i // n_cols
+            row = i // n_cols
             col = i % n_cols
-            # if n_rows == 1:
-            #     ax = axs[col]
-            # else:
-            #     ax = axs[row, col]
-            ax = axes_ravel[i]
+            if n_rows == 1:
+                ax = axs[col]
+            else:
+                ax = axs[row, col]
 
             if is_categorical[feature_idx] == 1:
                 categorical_dependence_plot(
@@ -269,12 +252,10 @@ class ShapDisplay2:
             ax.xaxis.set_tick_params(labelsize=14)
             ax.yaxis.set_tick_params(labelsize=14)
             ax.grid(color="black", alpha=0.2)
-            # fig.tight_layout()
+            fig.tight_layout()
 
-        return figure_
-
-        # if filename is not None:
-        #     plt.savefig(filename, format="pdf", bbox_inches="tight", dpi=750)
+        if filename is not None:
+            plt.savefig(filename, format="pdf", bbox_inches="tight", dpi=750)
 
     def interaction_plot(
         self,
