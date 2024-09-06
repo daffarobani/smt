@@ -119,6 +119,45 @@ class TestPartialDependenceNumerical(SMTestCase):
 
             assert pd_results[i]["average"].shape == (self.grid_resolution_2d, self.grid_resolution_2d)
 
+    @staticmethod
+    def run_pd_numerical_example():
+        from smt.problems import WingWeight
+        from smt.sampling_methods import LHS
+        from smt.surrogate_models import KRG
+        from smt.applications.explainability_tools import PartialDependenceDisplay
+
+        nsamples = 100
+        grid_resolution_2d = 10
+        fun = WingWeight()
+        sampling = LHS(xlimits=fun.xlimits, criterion='ese', random_state=1)
+        x = sampling(nsamples)
+        y = fun(x)
+
+        feature_names = [
+            r'$S_{w}$', r'$W_{fw}$', r'$A$', r'$\Delta$',
+            r'$q$', r'$\lambda$', r'$t_{c}$', r'$N_{z}$',
+            r'$W_{dg}$', r'$W_{p}$',
+        ]
+
+        model = KRG(
+            theta0=[1e-2] * x.shape[1],
+            print_prediction=False
+        )
+        model.set_training_values(x, y)
+        model.train()
+
+        features = [(0, 1), (2, 3)]
+        pdd = PartialDependenceDisplay.from_surrogate_model(
+            model,
+            x,
+            features,
+            feature_names=feature_names,
+            grid_resolution=grid_resolution_2d,
+        )
+        pdd_fig = pdd.plot(centered=True)
+        #
+        # pdd_fig
+
 
 if __name__ == "__main__":
     unittest.main()
